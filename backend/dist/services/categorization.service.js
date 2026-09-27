@@ -23,6 +23,15 @@ class CategorizationService {
             ]
         },
         {
+            category: 'Bares y Vida Nocturna',
+            keywords: [
+                'xupitos', 'xupitos bar', 'irish pub', 'the irish pub', 'pub', 'irish',
+                'bar', 'lounge', 'cerveceria', 'cervecería', 'discoteca', 'club', 'nightclub',
+                'cocktail', 'tragos', 'licor', 'liquor', 'licorera', 'speakeasy', 'taberna',
+                'drinks', 'after work', 'rooftop bar', 'sports bar', 'hookah lounge'
+            ]
+        },
+        {
             category: 'Restaurantes y Comida',
             keywords: [
                 'coffee', 'coffee shop', 'pucmm', 'unibe', 'intec', 'apap cafeteria',
@@ -32,10 +41,9 @@ class CategorizationService {
                 'outback', 'applebee', 'pizzarelli', 'adrian tropical',
                 'jade', 'sbg', 'forno bravo', 'helados bon', 'bon',
                 'paletas bajo cero', 'restaurant', 'restaurante',
-                'bistro', 'bar', 'grill', 'panaderia', 'panadería', 'reposteria', 'repostería',
+                'bistro', 'grill', 'panaderia', 'panadería', 'reposteria', 'repostería',
                 'food hall', 'sushi', 'tacos', 'empanadas', 'taqueria', 'taquería',
-                'deli', 'comedor', 'heladeria', 'heladería', 'snack', 'cappuccino', 'espresso',
-                'pub', 'irish pub', 'the irish pub', 'xupitos', 'lounge', 'cerveceria', 'cervecería', 'drinks'
+                'deli', 'comedor', 'heladeria', 'heladería', 'snack', 'cappuccino', 'espresso'
             ]
         },
         {

@@ -18,8 +18,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.gastabien.app.data.models.Transaction
 import com.gastabien.app.ui.UiState
-import com.gastabien.app.ui.theme.*
 import com.gastabien.app.ui.components.BankFilterChips
+import com.gastabien.app.ui.components.getCategoryTheme
+import com.gastabien.app.ui.theme.*
 import java.text.NumberFormat
 import java.util.Locale
 
@@ -35,15 +36,30 @@ fun TransactionsScreen(
 ) {
     val dopFormat = NumberFormat.getCurrencyInstance(Locale("es", "DO"))
     var searchText by remember { mutableStateOf("") }
+    var itemToDelete by remember { mutableStateOf<String?>(null) }
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Movimientos", fontWeight = FontWeight.Bold, color = Color.White) },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = Slate950)
+                title = {
+                    Column {
+                        Text(
+                            text = "Movimientos Bancarios",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 20.sp,
+                            color = OnSurface
+                        )
+                        Text(
+                            text = "Historial transaccional sincronizado",
+                            fontSize = 11.sp,
+                            color = OnSurfaceVariant
+                        )
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = Surface)
             )
         },
-        containerColor = Slate950
+        containerColor = Surface
     ) { padding ->
         Column(
             modifier = Modifier
@@ -58,19 +74,47 @@ fun TransactionsScreen(
                     searchText = it
                     onSearchChange(it)
                 },
-                placeholder = { Text("Buscar comercio o concepto...", color = Slate400, fontSize = 13.sp) },
-                leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, tint = Slate400) },
+                placeholder = {
+                    Text(
+                        "Buscar por comercio, banco o categoría...",
+                        color = OnSurfaceVariant,
+                        fontSize = 13.sp
+                    )
+                },
+                leadingIcon = {
+                    Icon(
+                        Icons.Default.Search,
+                        contentDescription = null,
+                        tint = OnSurfaceVariant,
+                        modifier = Modifier.size(18.dp)
+                    )
+                },
+                trailingIcon = {
+                    if (searchText.isNotEmpty()) {
+                        IconButton(onClick = {
+                            searchText = ""
+                            onSearchChange("")
+                        }) {
+                            Icon(
+                                Icons.Default.Close,
+                                contentDescription = "Limpiar",
+                                tint = OnSurfaceVariant,
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
+                    }
+                },
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(bottom = 8.dp),
-                shape = RoundedCornerShape(12.dp),
+                shape = RoundedCornerShape(14.dp),
                 colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = Emerald400,
-                    unfocusedBorderColor = Slate800,
-                    focusedContainerColor = Slate900,
-                    unfocusedContainerColor = Slate900,
-                    focusedTextColor = Color.White,
-                    unfocusedTextColor = Color.White
+                    focusedBorderColor = Primary,
+                    unfocusedBorderColor = OutlineVariant.copy(alpha = 0.35f),
+                    focusedContainerColor = SurfaceContainerLow,
+                    unfocusedContainerColor = SurfaceContainerLow,
+                    focusedTextColor = OnSurface,
+                    unfocusedTextColor = OnSurface
                 ),
                 singleLine = true
             )
@@ -85,12 +129,12 @@ fun TransactionsScreen(
             when (transactionsState) {
                 is UiState.Loading -> {
                     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        CircularProgressIndicator(color = Emerald400)
+                        CircularProgressIndicator(color = Secondary)
                     }
                 }
                 is UiState.Error -> {
                     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        Text(text = "Error al cargar movimientos", color = Rose500)
+                        Text(text = "Error al cargar movimientos", color = ErrorColor)
                     }
                 }
                 is UiState.Success -> {
@@ -99,19 +143,48 @@ fun TransactionsScreen(
                     }
 
                     if (list.isEmpty()) {
-                        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                            Text("No se encontraron transacciones", color = Slate400)
+                        Box(
+                            modifier = Modifier.fillMaxSize(),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Icon(
+                                    Icons.Default.ReceiptLong,
+                                    contentDescription = null,
+                                    tint = OnSurfaceVariant,
+                                    modifier = Modifier.size(40.dp)
+                                )
+                                Spacer(modifier = Modifier.height(10.dp))
+                                Text("No se encontraron movimientos", color = OnSurfaceVariant, fontSize = 14.sp)
+                            }
                         }
                     } else {
                         LazyColumn(
                             verticalArrangement = Arrangement.spacedBy(10.dp),
                             modifier = Modifier.fillMaxSize()
                         ) {
+                            item {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 2.dp, vertical = 2.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = "${list.size} transacciones registradas",
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = OnSurfaceVariant
+                                    )
+                                }
+                            }
+
                             items(list, key = { it.id }) { tx ->
                                 TransactionDetailCard(
                                     tx = tx,
                                     dopFormat = dopFormat,
-                                    onDelete = { onDeleteClick(tx.id) }
+                                    onDelete = { itemToDelete = tx.id }
                                 )
                             }
                             item {
@@ -123,6 +196,33 @@ fun TransactionsScreen(
                 else -> {}
             }
         }
+
+        // Delete Confirmation Dialog
+        if (itemToDelete != null) {
+            AlertDialog(
+                onDismissRequest = { itemToDelete = null },
+                title = { Text("Eliminar Movimiento", color = OnSurface, fontWeight = FontWeight.Bold) },
+                text = { Text("¿Deseas eliminar este registro de tus transacciones?", color = OnSurfaceVariant) },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            itemToDelete?.let { onDeleteClick(it) }
+                            itemToDelete = null
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = ErrorColor)
+                    ) {
+                        Text("Eliminar", color = OnError, fontWeight = FontWeight.Bold)
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { itemToDelete = null }) {
+                        Text("Cancelar", color = OnSurfaceVariant)
+                    }
+                },
+                containerColor = SurfaceContainerHigh,
+                shape = RoundedCornerShape(18.dp)
+            )
+        }
     }
 }
 
@@ -133,10 +233,12 @@ fun TransactionDetailCard(
     onDelete: () -> Unit
 ) {
     val isExpense = tx.type == "EXPENSE"
+    val theme = getCategoryTheme(tx.category)
 
-    Card(
-        shape = RoundedCornerShape(14.dp),
-        colors = CardDefaults.cardColors(containerColor = Slate900),
+    Surface(
+        shape = RoundedCornerShape(16.dp),
+        color = SurfaceContainerLow.copy(alpha = 0.85f),
+        border = androidx.compose.foundation.BorderStroke(1.dp, OutlineVariant.copy(alpha = 0.25f)),
         modifier = Modifier.fillMaxWidth()
     ) {
         Row(
@@ -148,14 +250,14 @@ fun TransactionDetailCard(
             Box(
                 modifier = Modifier
                     .size(42.dp)
-                    .clip(RoundedCornerShape(10.dp))
-                    .background(if (isExpense) Rose500.copy(alpha = 0.15f) else Emerald500.copy(alpha = 0.15f)),
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(if (isExpense) theme.containerColor else Secondary.copy(alpha = 0.15f)),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
-                    if (isExpense) Icons.Default.ArrowDownward else Icons.Default.ArrowUpward,
+                    if (isExpense) theme.icon else Icons.Default.ArrowUpward,
                     contentDescription = null,
-                    tint = if (isExpense) Rose500 else Emerald400,
+                    tint = if (isExpense) theme.color else Secondary,
                     modifier = Modifier.size(20.dp)
                 )
             }
@@ -165,20 +267,39 @@ fun TransactionDetailCard(
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = tx.merchant,
-                    fontSize = 15.sp,
+                    fontSize = 14.sp,
                     fontWeight = FontWeight.Bold,
-                    color = Color.White
+                    color = OnSurface,
+                    maxLines = 1
                 )
-                Text(
-                    text = "${tx.bankName} • ${tx.category}",
-                    fontSize = 12.sp,
-                    color = Slate400
-                )
+                Spacer(modifier = Modifier.height(2.dp))
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Text(
+                        text = tx.bankName,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = Primary
+                    )
+                    Text(
+                        text = "•",
+                        fontSize = 11.sp,
+                        color = OnSurfaceVariant
+                    )
+                    Text(
+                        text = tx.category,
+                        fontSize = 11.sp,
+                        color = OnSurfaceVariant
+                    )
+                }
                 if (!tx.accountReference.isNullOrBlank()) {
+                    Spacer(modifier = Modifier.height(1.dp))
                     Text(
                         text = tx.accountReference,
-                        fontSize = 11.sp,
-                        color = Emerald400
+                        fontSize = 10.sp,
+                        color = Secondary
                     )
                 }
             }
@@ -186,18 +307,18 @@ fun TransactionDetailCard(
             Column(horizontalAlignment = Alignment.End) {
                 Text(
                     text = "${if (isExpense) "-" else "+"} ${dopFormat.format(tx.amount)}",
-                    fontSize = 15.sp,
+                    fontSize = 14.sp,
                     fontWeight = FontWeight.Bold,
-                    color = if (isExpense) Rose500 else Emerald400
+                    color = if (isExpense) ErrorColor else Secondary
                 )
                 IconButton(
                     onClick = onDelete,
-                    modifier = Modifier.size(28.dp)
+                    modifier = Modifier.size(26.dp)
                 ) {
                     Icon(
-                        Icons.Default.Delete,
+                        Icons.Default.DeleteOutline,
                         contentDescription = "Eliminar",
-                        tint = Slate400,
+                        tint = OnSurfaceVariant,
                         modifier = Modifier.size(16.dp)
                     )
                 }

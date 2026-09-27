@@ -6,18 +6,27 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 
 private val DarkColorScheme = darkColorScheme(
-    primary = Emerald500,
-    secondary = Emerald400,
-    tertiary = Indigo600,
-    background = Slate950,
-    surface = Slate900,
-    onPrimary = Color.White,
-    onSecondary = Color.White,
-    onTertiary = Color.White,
-    onBackground = Slate200,
-    onSurface = Slate200,
-    surfaceVariant = Slate800,
-    onSurfaceVariant = Slate400
+    primary = Primary,
+    onPrimary = OnPrimary,
+    primaryContainer = PrimaryContainer,
+    onPrimaryContainer = OnPrimaryContainer,
+    secondary = Secondary,
+    onSecondary = OnSecondary,
+    secondaryContainer = SecondaryContainer,
+    tertiary = Tertiary,
+    onTertiary = OnTertiary,
+    tertiaryContainer = TertiaryContainer,
+    error = ErrorColor,
+    onError = OnError,
+    errorContainer = ErrorContainer,
+    background = Surface,
+    onBackground = OnSurface,
+    surface = SurfaceContainerLow,
+    onSurface = OnSurface,
+    surfaceVariant = SurfaceContainerHigh,
+    onSurfaceVariant = OnSurfaceVariant,
+    outline = Outline,
+    outlineVariant = OutlineVariant
 )
 
 @Composable
@@ -30,3 +39,4 @@ fun GastaBienTheme(
         content = content
     )
 }
+

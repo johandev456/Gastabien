@@ -1,6 +1,8 @@
 package com.gastabien.app.ui.screens
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -13,6 +15,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -21,9 +24,9 @@ import com.gastabien.app.data.models.AnalyticsSummary
 import com.gastabien.app.data.models.CategorySummary
 import com.gastabien.app.data.models.Transaction
 import com.gastabien.app.ui.UiState
-import com.gastabien.app.ui.theme.*
 import com.gastabien.app.ui.components.BankFilterChips
-import com.gastabien.app.ui.components.DOMINICAN_BANKS
+import com.gastabien.app.ui.components.getCategoryTheme
+import com.gastabien.app.ui.theme.*
 import java.text.NumberFormat
 import java.util.Locale
 
@@ -44,29 +47,64 @@ fun DashboardScreen(
         topBar = {
             TopAppBar(
                 title = {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            text = "Gasta",
-                            fontWeight = FontWeight.Bold,
-                            color = Color.White
-                        )
-                        Text(
-                            text = "Bien",
-                            fontWeight = FontWeight.Bold,
-                            color = Emerald400
-                        )
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Surface(
-                            shape = RoundedCornerShape(4.dp),
-                            color = Slate800
-                        ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
                             Text(
-                                text = "RD",
-                                color = Emerald400,
-                                fontSize = 10.sp,
+                                text = "Gasta",
                                 fontWeight = FontWeight.Bold,
-                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
+                                fontSize = 20.sp,
+                                color = OnSurface
                             )
+                            Text(
+                                text = "Bien",
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 20.sp,
+                                color = Secondary
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Surface(
+                                shape = RoundedCornerShape(6.dp),
+                                color = SurfaceContainerHigh,
+                                border = androidx.compose.foundation.BorderStroke(1.dp, OutlineVariant.copy(alpha = 0.3f))
+                            ) {
+                                Text(
+                                    text = "RD",
+                                    color = Secondary,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
+                                )
+                            }
+                        }
+
+                        // Live Pulse Dot
+                        Surface(
+                            shape = RoundedCornerShape(12.dp),
+                            color = Secondary.copy(alpha = 0.12f),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, Secondary.copy(alpha = 0.25f))
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(6.dp)
+                                        .clip(CircleShape)
+                                        .background(Secondary)
+                                )
+                                Text(
+                                    text = "LIVE",
+                                    fontSize = 9.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Secondary,
+                                    letterSpacing = 0.5.sp
+                                )
+                            }
                         }
                     }
                 },
@@ -77,7 +115,7 @@ fun DashboardScreen(
                         Icon(
                             Icons.Default.Description,
                             contentDescription = "Estado de Cuenta",
-                            tint = Emerald400
+                            tint = Primary
                         )
                     }
 
@@ -88,33 +126,35 @@ fun DashboardScreen(
                         if (isSyncing) {
                             CircularProgressIndicator(
                                 modifier = Modifier.size(20.dp),
-                                color = Emerald400,
+                                color = Secondary,
                                 strokeWidth = 2.dp
                             )
                         } else {
                             Icon(
                                 Icons.Default.Refresh,
                                 contentDescription = "Sincronizar",
-                                tint = Emerald400
+                                tint = Secondary
                             )
                         }
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = Slate950
+                    containerColor = Surface
                 )
             )
         },
         floatingActionButton = {
             FloatingActionButton(
                 onClick = onAddClick,
-                containerColor = Emerald600,
-                contentColor = Color.White
+                containerColor = SecondaryContainer,
+                contentColor = Color.White,
+                shape = RoundedCornerShape(16.dp),
+                elevation = FloatingActionButtonDefaults.elevation(defaultElevation = 6.dp)
             ) {
-                Icon(Icons.Default.Add, contentDescription = "Nuevo Gasto")
+                Icon(Icons.Default.Add, contentDescription = "Nuevo Movimiento")
             }
         },
-        containerColor = Slate950
+        containerColor = Surface
     ) { padding ->
         when (summaryState) {
             is UiState.Loading -> {
@@ -124,7 +164,7 @@ fun DashboardScreen(
                         .padding(padding),
                     contentAlignment = Alignment.Center
                 ) {
-                    CircularProgressIndicator(color = Emerald400)
+                    CircularProgressIndicator(color = Secondary)
                 }
             }
             is UiState.Error -> {
@@ -136,14 +176,15 @@ fun DashboardScreen(
                 ) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Text(
-                            text = "Error al cargar datos",
-                            color = Rose500,
+                            text = "Error al sincronizar datos bancarios",
+                            color = ErrorColor,
                             fontWeight = FontWeight.Bold
                         )
-                        Spacer(modifier = Modifier.height(8.dp))
+                        Spacer(modifier = Modifier.height(10.dp))
                         Button(
                             onClick = onSyncClick,
-                            colors = ButtonDefaults.buttonColors(containerColor = Slate800)
+                            colors = ButtonDefaults.buttonColors(containerColor = SurfaceContainerHigh),
+                            shape = RoundedCornerShape(12.dp)
                         ) {
                             Text("Reintentar")
                         }
@@ -169,112 +210,159 @@ fun DashboardScreen(
                         )
                     }
 
-                    // KPI Balance Card
+                    // Hero Balance Bento Card
                     item {
-                        BalanceCard(summary, dopFormat)
+                        HeroBalanceCard(summary, dopFormat)
                     }
 
-                    // Incomes vs Expenses Mini Cards
+                    // Bento 2x2 KPI Mini Cards Grid
+                    item {
+                        BentoKpiGrid(summary, dopFormat)
+                    }
+
+                    // Categories Header
                     item {
                         Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = 6.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            KpiMiniCard(
-                                title = "Gastos del Mes",
-                                amount = dopFormat.format(summary.totalExpenses),
-                                icon = Icons.Default.TrendingDown,
-                                iconColor = Rose500,
-                                modifier = Modifier.weight(1f)
-                            )
-                            KpiMiniCard(
-                                title = "Ingresos",
-                                amount = dopFormat.format(summary.totalIncome),
-                                icon = Icons.Default.TrendingUp,
-                                iconColor = Emerald400,
-                                modifier = Modifier.weight(1f)
-                            )
+                            Column {
+                                Text(
+                                    text = "Gastos por Categoría",
+                                    fontSize = 17.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = OnSurface
+                                )
+                                Text(
+                                    text = "Clasificación automática RD",
+                                    fontSize = 12.sp,
+                                    color = OnSurfaceVariant
+                                )
+                            }
+                            Surface(
+                                shape = RoundedCornerShape(20.dp),
+                                color = SurfaceContainerHigh,
+                                border = androidx.compose.foundation.BorderStroke(1.dp, OutlineVariant.copy(alpha = 0.25f))
+                            ) {
+                                Text(
+                                    text = "Septiembre",
+                                    color = Primary,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                                )
+                            }
                         }
-                    }
-
-                    // Top Categories Header
-                    item {
-                        Text(
-                            text = "Principales Categorías de Gastos",
-                            fontSize = 16.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color.White,
-                            modifier = Modifier.padding(top = 8.dp)
-                        )
                     }
 
                     if (summary.categories.isEmpty()) {
                         item {
-                            Card(
-                                shape = RoundedCornerShape(14.dp),
-                                colors = CardDefaults.cardColors(containerColor = Slate900),
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
+                            GlassCard(modifier = Modifier.fillMaxWidth()) {
                                 Text(
-                                    text = "Sin categorías aún. Sube tu estado de cuenta para ver el desglose.",
+                                    text = "Sin categorías registradas en este período. Sube tu estado de cuenta para visualizar el desglose inteligente.",
                                     fontSize = 12.sp,
-                                    color = Slate400,
-                                    modifier = Modifier.padding(16.dp)
+                                    color = OnSurfaceVariant,
+                                    modifier = Modifier.padding(18.dp)
                                 )
                             }
                         }
                     } else {
-                        items(summary.categories.take(4)) { cat ->
+                        items(summary.categories.take(5)) { cat ->
                             CategoryCardItem(cat, dopFormat)
                         }
                     }
 
                     // Recent Transactions Header
                     item {
-                        Text(
-                            text = "Últimos Movimientos Bancarios",
-                            fontSize = 16.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color.White,
-                            modifier = Modifier.padding(top = 8.dp)
-                        )
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = 8.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column {
+                                Text(
+                                    text = "Últimos Movimientos",
+                                    fontSize = 17.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = OnSurface
+                                )
+                                Text(
+                                    text = "Validado contra estados de cuenta",
+                                    fontSize = 12.sp,
+                                    color = OnSurfaceVariant
+                                )
+                            }
+                        }
                     }
 
                     if (summary.recentTransactions.isEmpty()) {
                         item {
-                            Card(
-                                shape = RoundedCornerShape(14.dp),
-                                colors = CardDefaults.cardColors(containerColor = Slate900),
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
+                            GlassCard(modifier = Modifier.fillMaxWidth()) {
                                 Column(
                                     modifier = Modifier.padding(20.dp),
                                     horizontalAlignment = Alignment.CenterHorizontally
                                 ) {
+                                    Icon(
+                                        Icons.Default.ReceiptLong,
+                                        contentDescription = null,
+                                        tint = OnSurfaceVariant,
+                                        modifier = Modifier.size(32.dp)
+                                    )
+                                    Spacer(modifier = Modifier.height(8.dp))
                                     Text(
                                         text = "No hay movimientos registrados",
-                                        fontWeight = FontWeight.SemiBold,
-                                        color = Color.White,
+                                        fontWeight = FontWeight.Bold,
+                                        color = OnSurface,
                                         fontSize = 14.sp
                                     )
                                     Spacer(modifier = Modifier.height(4.dp))
                                     Text(
-                                        text = "Toca el icono 📑 arriba para subir tu estado de cuenta (.csv) o el botón + para agregar un gasto.",
-                                        color = Slate400,
-                                        fontSize = 12.sp,
-                                        modifier = Modifier.padding(horizontal = 8.dp)
+                                        text = "Toca el icono 📑 superior para importar tu extracto bancario (.csv).",
+                                        color = OnSurfaceVariant,
+                                        fontSize = 12.sp
                                     )
                                 }
                             }
                         }
                     } else {
-                        items(summary.recentTransactions.take(5)) { tx ->
+                        items(summary.recentTransactions.take(6)) { tx ->
                             RecentTransactionItem(tx, dopFormat)
                         }
                     }
 
+                    // Security Footer Callout
                     item {
-                        Spacer(modifier = Modifier.height(60.dp))
+                        Surface(
+                            shape = RoundedCornerShape(14.dp),
+                            color = SurfaceContainerHigh.copy(alpha = 0.5f),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, OutlineVariant.copy(alpha = 0.2f)),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = 4.dp, bottom = 80.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(12.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Icon(
+                                    Icons.Default.Security,
+                                    contentDescription = null,
+                                    tint = Secondary,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                                Text(
+                                    text = "Validación bancaria cifrada • Sincronización oficial RD",
+                                    fontSize = 11.sp,
+                                    color = OnSurfaceVariant
+                                )
+                            }
+                        }
                     }
                 }
             }
@@ -284,109 +372,179 @@ fun DashboardScreen(
 }
 
 @Composable
-fun BalanceCard(summary: AnalyticsSummary, dopFormat: NumberFormat) {
+fun GlassCard(
+    modifier: Modifier = Modifier,
+    content: @Composable () -> Unit
+) {
+    Surface(
+        shape = RoundedCornerShape(18.dp),
+        color = SurfaceContainerLow.copy(alpha = 0.85f),
+        border = androidx.compose.foundation.BorderStroke(1.dp, OutlineVariant.copy(alpha = 0.25f)),
+        modifier = modifier
+    ) {
+        Box {
+            // Specular Top Shine Line
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(1.dp)
+                    .background(
+                        Brush.horizontalGradient(
+                            listOf(Color.Transparent, Primary.copy(alpha = 0.35f), Color.Transparent)
+                        )
+                    )
+            )
+            content()
+        }
+    }
+}
+
+@Composable
+fun HeroBalanceCard(summary: AnalyticsSummary, dopFormat: NumberFormat) {
     val isNetPositive = summary.netBalance >= 0
 
-    Card(
-        shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(containerColor = Slate900),
-        modifier = Modifier.fillMaxWidth()
-    ) {
+    GlassCard(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(20.dp)) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween,
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Text(
-                    text = "BALANCE NETO",
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = Slate400,
-                    letterSpacing = 1.sp
-                )
-                Surface(
-                    shape = CircleShape,
-                    color = if (isNetPositive) Emerald500.copy(alpha = 0.15f) else Rose500.copy(alpha = 0.15f)
-                ) {
-                    Icon(
-                        if (isNetPositive) Icons.Default.AccountBalanceWallet else Icons.Default.Warning,
-                        contentDescription = null,
-                        tint = if (isNetPositive) Emerald400 else Rose500,
-                        modifier = Modifier
-                            .padding(8.dp)
-                            .size(18.dp)
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text(
+                        text = "BALANCE DISPONIBLE",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = OnSurfaceVariant,
+                        letterSpacing = 1.2.sp
                     )
+                }
+
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = if (isNetPositive) Secondary.copy(alpha = 0.15f) else ErrorColor.copy(alpha = 0.15f),
+                    border = androidx.compose.foundation.BorderStroke(
+                        1.dp,
+                        if (isNetPositive) Secondary.copy(alpha = 0.3f) else ErrorColor.copy(alpha = 0.3f)
+                    )
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Icon(
+                            if (isNetPositive) Icons.Default.TrendingUp else Icons.Default.TrendingDown,
+                            contentDescription = null,
+                            tint = if (isNetPositive) Secondary else ErrorColor,
+                            modifier = Modifier.size(12.dp)
+                        )
+                        Text(
+                            text = if (isNetPositive) "SUPERÁVIT" else "DÉFICIT",
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = if (isNetPositive) Secondary else ErrorColor
+                        )
+                    }
                 }
             }
 
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(10.dp))
 
             Text(
                 text = dopFormat.format(summary.netBalance),
                 fontSize = 32.sp,
                 fontWeight = FontWeight.ExtraBold,
-                color = if (isNetPositive) Emerald400 else Rose500
+                color = if (isNetPositive) Secondary else ErrorColor,
+                letterSpacing = (-0.5).sp
             )
 
-            Spacer(modifier = Modifier.height(6.dp))
+            Spacer(modifier = Modifier.height(8.dp))
 
-            Text(
-                text = "${summary.transactionsCount} movimientos sincronizados",
-                fontSize = 12.sp,
-                color = Slate400
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                Icon(
+                    Icons.Default.Verified,
+                    contentDescription = null,
+                    tint = Primary,
+                    modifier = Modifier.size(14.dp)
+                )
+                Text(
+                    text = "${summary.transactionsCount} movimientos conciliados con bancos RD",
+                    fontSize = 12.sp,
+                    color = OnSurfaceVariant
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun BentoKpiGrid(summary: AnalyticsSummary, dopFormat: NumberFormat) {
+    val savingsPct = if (summary.totalIncome > 0) {
+        val pct = ((summary.totalIncome - summary.totalExpenses) / summary.totalIncome) * 100.0
+        "%.1f%%".format(maxOf(0.0, pct))
+    } else {
+        "0.0%"
+    }
+
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            BentoMiniCard(
+                title = "Gastos Totales",
+                amount = dopFormat.format(summary.totalExpenses),
+                icon = Icons.Default.TrendingDown,
+                accentColor = ErrorColor,
+                modifier = Modifier.weight(1f)
+            )
+            BentoMiniCard(
+                title = "Ingresos del Mes",
+                amount = dopFormat.format(summary.totalIncome),
+                icon = Icons.Default.TrendingUp,
+                accentColor = Secondary,
+                modifier = Modifier.weight(1f)
+            )
+        }
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            BentoMiniCard(
+                title = "Tasa de Ahorro",
+                amount = savingsPct,
+                icon = Icons.Default.Savings,
+                accentColor = Primary,
+                subtitle = "Salud financiera",
+                modifier = Modifier.weight(1f)
+            )
+            BentoMiniCard(
+                title = "Bancos Vinculados",
+                amount = "${summary.byBank.size} Activos",
+                icon = Icons.Default.AccountBalance,
+                accentColor = Tertiary,
+                subtitle = "RD Bancos",
+                modifier = Modifier.weight(1f)
             )
         }
     }
 }
 
 @Composable
-fun KpiMiniCard(
+fun BentoMiniCard(
     title: String,
     amount: String,
     icon: androidx.compose.ui.graphics.vector.ImageVector,
-    iconColor: Color,
+    accentColor: Color,
+    subtitle: String? = null,
     modifier: Modifier = Modifier
 ) {
-    Card(
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = Slate900),
-        modifier = modifier
-    ) {
-        Column(modifier = Modifier.padding(14.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(
-                    icon,
-                    contentDescription = null,
-                    tint = iconColor,
-                    modifier = Modifier.size(16.dp)
-                )
-                Spacer(modifier = Modifier.width(6.dp))
-                Text(
-                    text = title,
-                    fontSize = 11.sp,
-                    color = Slate400,
-                    fontWeight = FontWeight.Medium
-                )
-            }
-            Spacer(modifier = Modifier.height(6.dp))
-            Text(
-                text = amount,
-                fontSize = 17.sp,
-                fontWeight = FontWeight.Bold,
-                color = Color.White
-            )
-        }
-    }
-}
-
-@Composable
-fun CategoryCardItem(cat: CategorySummary, dopFormat: NumberFormat) {
-    Card(
-        shape = RoundedCornerShape(14.dp),
-        colors = CardDefaults.cardColors(containerColor = Slate900),
-        modifier = Modifier.fillMaxWidth()
-    ) {
+    GlassCard(modifier = modifier) {
         Column(modifier = Modifier.padding(14.dp)) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
@@ -394,28 +552,129 @@ fun CategoryCardItem(cat: CategorySummary, dopFormat: NumberFormat) {
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Text(
-                    text = cat.category,
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = Color.White
+                    text = title,
+                    fontSize = 11.sp,
+                    color = OnSurfaceVariant,
+                    fontWeight = FontWeight.Medium
                 )
+                Box(
+                    modifier = Modifier
+                        .size(24.dp)
+                        .clip(CircleShape)
+                        .background(accentColor.copy(alpha = 0.15f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        icon,
+                        contentDescription = null,
+                        tint = accentColor,
+                        modifier = Modifier.size(13.dp)
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.height(6.dp))
+            Text(
+                text = amount,
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Bold,
+                color = OnSurface
+            )
+            if (subtitle != null) {
+                Spacer(modifier = Modifier.height(2.dp))
                 Text(
-                    text = dopFormat.format(cat.total),
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = Color.White
+                    text = subtitle,
+                    fontSize = 10.sp,
+                    color = accentColor,
+                    fontWeight = FontWeight.SemiBold
                 )
             }
-            Spacer(modifier = Modifier.height(8.dp))
-            LinearProgressIndicator(
-                progress = { (cat.percentage / 100f).toFloat() },
+        }
+    }
+}
+
+@Composable
+fun CategoryCardItem(cat: CategorySummary, dopFormat: NumberFormat) {
+    val theme = getCategoryTheme(cat.category)
+
+    GlassCard(modifier = Modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.padding(14.dp)) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(34.dp)
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(theme.containerColor),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            theme.icon,
+                            contentDescription = null,
+                            tint = theme.color,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+
+                    Column {
+                        Text(
+                            text = cat.category,
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = OnSurface
+                        )
+                        Text(
+                            text = "${cat.count} transacciones",
+                            fontSize = 11.sp,
+                            color = OnSurfaceVariant
+                        )
+                    }
+                }
+
+                Column(horizontalAlignment = Alignment.End) {
+                    Text(
+                        text = dopFormat.format(cat.total),
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = OnSurface
+                    )
+                    Text(
+                        text = "${cat.percentage}%",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = theme.color
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            // Glowing progress bar
+            Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(6.dp)
-                    .clip(CircleShape),
-                color = Emerald400,
-                trackColor = Slate800,
-            )
+                    .clip(CircleShape)
+                    .background(SurfaceContainerHighest)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth((cat.percentage / 100f).toFloat().coerceIn(0.05f, 1f))
+                        .fillMaxHeight()
+                        .clip(CircleShape)
+                        .background(
+                            Brush.horizontalGradient(
+                                listOf(theme.color.copy(alpha = 0.7f), theme.color)
+                            )
+                        )
+                )
+            }
         }
     }
 }
@@ -423,12 +682,9 @@ fun CategoryCardItem(cat: CategorySummary, dopFormat: NumberFormat) {
 @Composable
 fun RecentTransactionItem(tx: Transaction, dopFormat: NumberFormat) {
     val isExpense = tx.type == "EXPENSE"
+    val theme = getCategoryTheme(tx.category)
 
-    Card(
-        shape = RoundedCornerShape(14.dp),
-        colors = CardDefaults.cardColors(containerColor = Slate900),
-        modifier = Modifier.fillMaxWidth()
-    ) {
+    GlassCard(modifier = Modifier.fillMaxWidth()) {
         Row(
             modifier = Modifier
                 .padding(14.dp)
@@ -438,15 +694,15 @@ fun RecentTransactionItem(tx: Transaction, dopFormat: NumberFormat) {
             Box(
                 modifier = Modifier
                     .size(40.dp)
-                    .clip(RoundedCornerShape(10.dp))
-                    .background(if (isExpense) Rose500.copy(alpha = 0.15f) else Emerald500.copy(alpha = 0.15f)),
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(if (isExpense) theme.containerColor else Secondary.copy(alpha = 0.15f)),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
-                    if (isExpense) Icons.Default.ArrowDownward else Icons.Default.ArrowUpward,
+                    if (isExpense) theme.icon else Icons.Default.ArrowUpward,
                     contentDescription = null,
-                    tint = if (isExpense) Rose500 else Emerald400,
-                    modifier = Modifier.size(18.dp)
+                    tint = if (isExpense) theme.color else Secondary,
+                    modifier = Modifier.size(19.dp)
                 )
             }
 
@@ -457,20 +713,38 @@ fun RecentTransactionItem(tx: Transaction, dopFormat: NumberFormat) {
                     text = tx.merchant,
                     fontSize = 14.sp,
                     fontWeight = FontWeight.SemiBold,
-                    color = Color.White
+                    color = OnSurface,
+                    maxLines = 1
                 )
-                Text(
-                    text = "${tx.bankName} • ${tx.category}",
-                    fontSize = 11.sp,
-                    color = Slate400
-                )
+                Spacer(modifier = Modifier.height(2.dp))
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Text(
+                        text = tx.bankName,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = Primary
+                    )
+                    Text(
+                        text = "•",
+                        fontSize = 11.sp,
+                        color = OnSurfaceVariant
+                    )
+                    Text(
+                        text = tx.category,
+                        fontSize = 11.sp,
+                        color = OnSurfaceVariant
+                    )
+                }
             }
 
             Text(
                 text = "${if (isExpense) "-" else "+"} ${dopFormat.format(tx.amount)}",
                 fontSize = 14.sp,
                 fontWeight = FontWeight.Bold,
-                color = if (isExpense) Rose500 else Emerald400
+                color = if (isExpense) ErrorColor else Secondary
             )
         }
     }

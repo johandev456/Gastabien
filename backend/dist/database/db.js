@@ -8,6 +8,7 @@ exports.initDatabase = initDatabase;
 const path_1 = __importDefault(require("path"));
 const fs_1 = __importDefault(require("fs"));
 const uuid_1 = require("uuid");
+const categorization_service_1 = require("../services/categorization.service");
 const DB_DIR = path_1.default.resolve(__dirname, '../../data');
 const DB_FILE = path_1.default.join(DB_DIR, 'gastabien_store.json');
 let memoryDb = {
@@ -47,6 +48,20 @@ function initDatabase() {
                 ignored_external_ids: loaded.ignored_external_ids || {},
                 oauth_config: loaded.oauth_config || undefined
             };
+            // Re-categorize transactions with updated business rules
+            let changed = false;
+            for (const tx of Object.values(memoryDb.transactions)) {
+                if (!tx.isManual) {
+                    const freshCategory = categorization_service_1.categorizationService.categorize(tx.merchant, tx.description, tx.type);
+                    if (freshCategory !== tx.category) {
+                        tx.category = freshCategory;
+                        changed = true;
+                    }
+                }
+            }
+            if (changed) {
+                saveDatabase();
+            }
         }
     }
     catch (err) {

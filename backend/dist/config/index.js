@@ -56,13 +56,14 @@ exports.SUPPORTED_BANKS = {
 };
 exports.CATEGORY_COLORS = {
     'Combustible': '#EF4444', // Red
-    'Supermercados': '#F59E0B', // Amber
+    'Supermercados': '#10B981', // Emerald
     'Restaurantes y Comida': '#F97316', // Orange
+    'Bares y Vida Nocturna': '#D500F9', // Magenta / Neon Purple
     'Entretenimiento y Suscripciones': '#8B5CF6', // Purple
     'Servicios y Facturas': '#3B82F6', // Blue
-    'Salud y Farmacias': '#10B981', // Emerald
+    'Salud y Farmacias': '#06B6D4', // Cyan
     'Compras y Retail': '#EC4899', // Pink
-    'Transporte y Viajes': '#06B6D4', // Cyan
+    'Transporte y Viajes': '#F59E0B', // Amber
     'Transferencias y Pagos': '#64748B', // Slate
     'Retiro de Efectivo': '#6366F1', // Indigo
     'Ingresos y Nómina': '#22C55E', // Green
@@ -72,6 +73,7 @@ exports.CATEGORY_ICONS = {
     'Combustible': 'fuel',
     'Supermercados': 'shopping-cart',
     'Restaurantes y Comida': 'utensils',
+    'Bares y Vida Nocturna': 'glass-water',
     'Entretenimiento y Suscripciones': 'tv',
     'Servicios y Facturas': 'zap',
     'Salud y Farmacias': 'activity',

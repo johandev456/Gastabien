@@ -21,6 +21,7 @@ const CATEGORIES: Category[] = [
   'Combustible',
   'Supermercados',
   'Restaurantes y Comida',
+  'Bares y Vida Nocturna',
   'Entretenimiento y Suscripciones',
   'Servicios y Facturas',
   'Salud y Farmacias',

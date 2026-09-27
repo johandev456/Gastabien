@@ -47,14 +47,24 @@ export const CategoryPieChart: React.FC<CategoryPieChartProps> = ({ categories }
         shadow: 'shadow-[0_0_12px_rgba(170,199,255,0.4)]'
       };
     }
+    if (lower.includes('bar') || lower.includes('pub') || lower.includes('nocturn') || lower.includes('discotec')) {
+      return {
+        icon: 'local_bar',
+        iconBg: 'bg-tertiary-container/25',
+        textCol: 'text-tertiary',
+        colorHex: '#d500f9',
+        barGrad: 'from-tertiary to-tertiary-container',
+        shadow: 'shadow-[0_0_12px_rgba(213,0,249,0.5)]'
+      };
+    }
     if (lower.includes('restauran') || lower.includes('comida') || lower.includes('cafe')) {
       return {
         icon: 'restaurant',
-        iconBg: 'bg-tertiary-container/20',
-        textCol: 'text-tertiary',
-        colorHex: '#c863fb',
-        barGrad: 'from-tertiary to-tertiary-container',
-        shadow: 'shadow-[0_0_12px_rgba(233,179,255,0.4)]'
+        iconBg: 'bg-[#ff9800]/20',
+        textCol: 'text-[#ffb74d]',
+        colorHex: '#ff9800',
+        barGrad: 'from-[#ff9800] to-[#f57c00]',
+        shadow: 'shadow-[0_0_12px_rgba(255,152,0,0.4)]'
       };
     }
     if (lower.includes('servici') || lower.includes('factur')) {

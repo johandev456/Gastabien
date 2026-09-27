@@ -6,8 +6,6 @@ import android.provider.OpenableColumns
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -83,9 +81,10 @@ fun SyncStatementDialog(
     }
 
     Dialog(onDismissRequest = onDismiss) {
-        Card(
-            shape = RoundedCornerShape(20.dp),
-            colors = CardDefaults.cardColors(containerColor = Slate900),
+        Surface(
+            shape = RoundedCornerShape(22.dp),
+            color = SurfaceContainerLow,
+            border = androidx.compose.foundation.BorderStroke(1.dp, OutlineVariant.copy(alpha = 0.3f)),
             modifier = Modifier
                 .fillMaxWidth()
                 .fillMaxHeight(0.9f)
@@ -100,55 +99,61 @@ fun SyncStatementDialog(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Text(
-                        text = "📑 Estado de Cuenta",
-                        fontSize = 18.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color.White
-                    )
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text(
+                            text = "📑 Estado de Cuenta",
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = OnSurface
+                        )
+                    }
                     IconButton(
                         onClick = onDismiss,
                         modifier = Modifier.size(24.dp)
                     ) {
-                        Icon(Icons.Default.Close, contentDescription = "Cerrar", tint = Slate400)
+                        Icon(Icons.Default.Close, contentDescription = "Cerrar", tint = OnSurfaceVariant)
                     }
                 }
 
                 Text(
-                    text = "Sube tu archivo .csv o pega los movimientos oficiales de tu banco.",
-                    fontSize = 12.sp,
-                    color = Slate400,
-                    modifier = Modifier.padding(top = 4.dp, bottom = 14.dp)
+                    text = "Conciliación bancaria oficial con extractos .csv",
+                    fontSize = 11.sp,
+                    color = OnSurfaceVariant,
+                    modifier = Modifier.padding(top = 2.dp, bottom = 14.dp)
                 )
 
                 if (report != null && report.report != null) {
                     val rep = report.report
-                    Card(
+                    Surface(
                         shape = RoundedCornerShape(14.dp),
-                        colors = CardDefaults.cardColors(containerColor = Emerald600.copy(alpha = 0.15f)),
+                        color = Secondary.copy(alpha = 0.12f),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, Secondary.copy(alpha = 0.3f)),
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(bottom = 16.dp)
                     ) {
                         Column(modifier = Modifier.padding(14.dp)) {
-                            Text(
-                                text = "✅ Conciliación Exitosa",
-                                fontWeight = FontWeight.Bold,
-                                color = Emerald400,
-                                fontSize = 14.sp
-                            )
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                Icon(Icons.Default.CheckCircle, contentDescription = null, tint = Secondary, modifier = Modifier.size(16.dp))
+                                Text(
+                                    text = "Conciliación Exitosa",
+                                    fontWeight = FontWeight.Bold,
+                                    color = Secondary,
+                                    fontSize = 14.sp
+                                )
+                            }
                             Spacer(modifier = Modifier.height(8.dp))
                             Text(
                                 text = "• Movimientos analizados: ${rep.totalStatementEntries}\n• Verificados: ${rep.matchedCount}\n• Nuevos agregados: ${rep.addedCount}\n• Nombres corregidos: ${rep.updatedCount}\n• Descartados (No en banco): ${rep.removedCount}",
-                                color = Color.White,
+                                color = OnSurface,
                                 fontSize = 12.sp,
                                 lineHeight = 18.sp
                             )
                             Spacer(modifier = Modifier.height(8.dp))
                             Text(
                                 text = "Ingresos: +RD$ ${"%,.2f".format(rep.totalIncomeAmount)} | Gastos: -RD$ ${"%,.2f".format(rep.totalExpenseAmount)}",
-                                color = Emerald300,
-                                fontWeight = FontWeight.SemiBold,
+                                color = SecondaryFixed,
+                                fontWeight = FontWeight.Bold,
                                 fontSize = 12.sp
                             )
                         }
@@ -160,32 +165,33 @@ fun SyncStatementDialog(
                     text = "1. Selecciona el Banco:",
                     fontSize = 12.sp,
                     fontWeight = FontWeight.SemiBold,
-                    color = Slate300
+                    color = OnSurface
                 )
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(vertical = 8.dp),
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     listOf("PROMERICA", "POPULAR", "BHD", "QIK").forEach { b ->
+                        val isSelected = bank == b
                         FilterChip(
-                            selected = bank == b,
+                            selected = isSelected,
                             onClick = { bank = b },
                             label = { 
                                 Text(
                                     text = if (b == "PROMERICA") "Prom." else if (b == "POPULAR") "Pop." else b, 
-                                    fontSize = 10.sp, 
+                                    fontSize = 11.sp, 
                                     fontWeight = FontWeight.Bold,
                                     maxLines = 1
                                 ) 
                             },
                             modifier = Modifier.weight(1f),
                             colors = FilterChipDefaults.filterChipColors(
-                                selectedContainerColor = Emerald600,
+                                selectedContainerColor = SecondaryContainer,
                                 selectedLabelColor = Color.White,
-                                containerColor = Slate800,
-                                labelColor = Slate400
+                                containerColor = SurfaceContainerHigh,
+                                labelColor = OnSurfaceVariant
                             )
                         )
                     }
@@ -195,33 +201,32 @@ fun SyncStatementDialog(
 
                 // File Upload Button
                 Text(
-                    text = "2. Cargar Archivo del Banco:",
+                    text = "2. Cargar Archivo CSV del Banco:",
                     fontSize = 12.sp,
                     fontWeight = FontWeight.SemiBold,
-                    color = Slate300
+                    color = OnSurface
                 )
 
                 Spacer(modifier = Modifier.height(6.dp))
 
                 Button(
                     onClick = {
-                        // Open file picker for all mime types (csv, txt, etc.)
                         filePickerLauncher.launch("*/*")
                     },
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(12.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = Slate800)
+                    colors = ButtonDefaults.buttonColors(containerColor = SurfaceContainerHigh)
                 ) {
                     Icon(
                         Icons.Default.AttachFile,
                         contentDescription = "Subir Archivo",
-                        tint = Emerald400,
+                        tint = Primary,
                         modifier = Modifier.size(18.dp)
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
                         text = if (selectedFileName != null) "Archivo: $selectedFileName" else "Seleccionar Archivo (.csv / .txt)",
-                        color = if (selectedFileName != null) Emerald400 else Color.White,
+                        color = if (selectedFileName != null) Secondary else OnSurface,
                         fontSize = 12.sp,
                         fontWeight = FontWeight.SemiBold
                     )
@@ -230,7 +235,7 @@ fun SyncStatementDialog(
                 if (fileReadError != null) {
                     Text(
                         text = fileReadError ?: "",
-                        color = Rose500,
+                        color = ErrorColor,
                         fontSize = 11.sp,
                         modifier = Modifier.padding(top = 4.dp)
                     )
@@ -238,12 +243,12 @@ fun SyncStatementDialog(
 
                 Spacer(modifier = Modifier.height(14.dp))
 
-                // Raw Text Box (Can be typed/pasted or filled by file)
+                // Raw Text Box
                 Text(
-                    text = "O pega el texto directamente:",
+                    text = "O pega el texto del estado de cuenta:",
                     fontSize = 12.sp,
                     fontWeight = FontWeight.SemiBold,
-                    color = Slate300
+                    color = OnSurface
                 )
 
                 Spacer(modifier = Modifier.height(6.dp))
@@ -253,8 +258,8 @@ fun SyncStatementDialog(
                     onValueChange = { statementText = it },
                     placeholder = {
                         Text(
-                            "Contenido del estado de cuenta...",
-                            color = Slate500,
+                            "Contenido del extracto bancario...",
+                            color = OnSurfaceVariant,
                             fontSize = 12.sp
                         )
                     },
@@ -262,10 +267,10 @@ fun SyncStatementDialog(
                         .fillMaxWidth()
                         .height(140.dp),
                     colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = Emerald600,
-                        unfocusedBorderColor = Slate700,
-                        focusedTextColor = Color.White,
-                        unfocusedTextColor = Color.White
+                        focusedBorderColor = Primary,
+                        unfocusedBorderColor = OutlineVariant.copy(alpha = 0.35f),
+                        focusedTextColor = OnSurface,
+                        unfocusedTextColor = OnSurface
                     ),
                     shape = RoundedCornerShape(12.dp)
                 )
@@ -280,7 +285,7 @@ fun SyncStatementDialog(
                         onClick = onDismiss,
                         modifier = Modifier.weight(1f),
                         shape = RoundedCornerShape(12.dp),
-                        colors = ButtonDefaults.outlinedButtonColors(contentColor = Slate400)
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = OnSurfaceVariant)
                     ) {
                         Text("Cerrar")
                     }
@@ -290,7 +295,7 @@ fun SyncStatementDialog(
                         modifier = Modifier.weight(1f),
                         enabled = statementText.isNotBlank() && !isProcessing,
                         shape = RoundedCornerShape(12.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = Emerald600)
+                        colors = ButtonDefaults.buttonColors(containerColor = SecondaryContainer)
                     ) {
                         if (isProcessing) {
                             CircularProgressIndicator(

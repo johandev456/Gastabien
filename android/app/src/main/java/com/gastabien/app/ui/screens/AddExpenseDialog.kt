@@ -24,7 +24,7 @@ fun AddExpenseDialog(
     var merchant by remember { mutableStateOf("") }
     var amountText by remember { mutableStateOf("") }
     var category by remember { mutableStateOf("Supermercados") }
-    var bank by remember { mutableStateOf("POPULAR") }
+    var bank by remember { mutableStateOf("PROMERICA") }
     var type by remember { mutableStateOf("EXPENSE") }
     var notes by remember { mutableStateOf("") }
 
@@ -32,12 +32,14 @@ fun AddExpenseDialog(
         "Combustible",
         "Supermercados",
         "Restaurantes y Comida",
+        "Bares y Vida Nocturna",
         "Entretenimiento y Suscripciones",
         "Servicios y Facturas",
         "Salud y Farmacias",
         "Compras y Retail",
         "Transporte y Viajes",
         "Transferencias y Pagos",
+        "Retiro de Efectivo",
         "Ingresos y Nómina",
         "Otros Gastos"
     )
@@ -45,9 +47,10 @@ fun AddExpenseDialog(
     var expandedCategory by remember { mutableStateOf(false) }
 
     Dialog(onDismissRequest = onDismiss) {
-        Card(
-            shape = RoundedCornerShape(20.dp),
-            colors = CardDefaults.cardColors(containerColor = Slate900),
+        Surface(
+            shape = RoundedCornerShape(22.dp),
+            color = SurfaceContainerLow,
+            border = androidx.compose.foundation.BorderStroke(1.dp, OutlineVariant.copy(alpha = 0.3f)),
             modifier = Modifier.fillMaxWidth()
         ) {
             Column(modifier = Modifier.padding(20.dp)) {
@@ -55,7 +58,12 @@ fun AddExpenseDialog(
                     text = "Nuevo Movimiento",
                     fontSize = 18.sp,
                     fontWeight = FontWeight.Bold,
-                    color = Color.White
+                    color = OnSurface
+                )
+                Text(
+                    text = "Registro manual con categorización inteligente",
+                    fontSize = 11.sp,
+                    color = OnSurfaceVariant
                 )
 
                 Spacer(modifier = Modifier.height(16.dp))
@@ -65,23 +73,31 @@ fun AddExpenseDialog(
                     Button(
                         onClick = { type = "EXPENSE" },
                         colors = ButtonDefaults.buttonColors(
-                            containerColor = if (type == "EXPENSE") Rose500 else Slate800
+                            containerColor = if (type == "EXPENSE") ErrorColor else SurfaceContainerHigh
                         ),
-                        shape = RoundedCornerShape(8.dp),
+                        shape = RoundedCornerShape(10.dp),
                         modifier = Modifier.weight(1f)
                     ) {
-                        Text("Gasto (-)")
+                        Text(
+                            "Gasto (-)",
+                            fontWeight = FontWeight.Bold,
+                            color = if (type == "EXPENSE") OnError else OnSurfaceVariant
+                        )
                     }
                     Spacer(modifier = Modifier.width(8.dp))
                     Button(
                         onClick = { type = "INCOME" },
                         colors = ButtonDefaults.buttonColors(
-                            containerColor = if (type == "INCOME") Emerald600 else Slate800
+                            containerColor = if (type == "INCOME") Secondary else SurfaceContainerHigh
                         ),
-                        shape = RoundedCornerShape(8.dp),
+                        shape = RoundedCornerShape(10.dp),
                         modifier = Modifier.weight(1f)
                     ) {
-                        Text("Ingreso (+)")
+                        Text(
+                            "Ingreso (+)",
+                            fontWeight = FontWeight.Bold,
+                            color = if (type == "INCOME") OnSecondary else OnSurfaceVariant
+                        )
                     }
                 }
 
@@ -91,14 +107,15 @@ fun AddExpenseDialog(
                 OutlinedTextField(
                     value = merchant,
                     onValueChange = { merchant = it },
-                    label = { Text("Comercio / Lugar", color = Slate400) },
+                    label = { Text("Comercio / Lugar / Concepto", color = OnSurfaceVariant) },
                     singleLine = true,
                     colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = Emerald400,
-                        unfocusedBorderColor = Slate800,
-                        focusedTextColor = Color.White,
-                        unfocusedTextColor = Color.White
+                        focusedBorderColor = Primary,
+                        unfocusedBorderColor = OutlineVariant.copy(alpha = 0.4f),
+                        focusedTextColor = OnSurface,
+                        unfocusedTextColor = OnSurface
                     ),
+                    shape = RoundedCornerShape(12.dp),
                     modifier = Modifier.fillMaxWidth()
                 )
 
@@ -108,15 +125,16 @@ fun AddExpenseDialog(
                 OutlinedTextField(
                     value = amountText,
                     onValueChange = { amountText = it },
-                    label = { Text("Monto (RD$)", color = Slate400) },
+                    label = { Text("Monto en DOP (RD$)", color = OnSurfaceVariant) },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                     singleLine = true,
                     colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = Emerald400,
-                        unfocusedBorderColor = Slate800,
-                        focusedTextColor = Color.White,
-                        unfocusedTextColor = Color.White
+                        focusedBorderColor = Primary,
+                        unfocusedBorderColor = OutlineVariant.copy(alpha = 0.4f),
+                        focusedTextColor = OnSurface,
+                        unfocusedTextColor = OnSurface
                     ),
+                    shape = RoundedCornerShape(12.dp),
                     modifier = Modifier.fillMaxWidth()
                 )
 
@@ -131,14 +149,15 @@ fun AddExpenseDialog(
                         value = category,
                         onValueChange = {},
                         readOnly = true,
-                        label = { Text("Categoría", color = Slate400) },
+                        label = { Text("Categoría", color = OnSurfaceVariant) },
                         trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expandedCategory) },
                         colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = Emerald400,
-                            unfocusedBorderColor = Slate800,
-                            focusedTextColor = Color.White,
-                            unfocusedTextColor = Color.White
+                            focusedBorderColor = Primary,
+                            unfocusedBorderColor = OutlineVariant.copy(alpha = 0.4f),
+                            focusedTextColor = OnSurface,
+                            unfocusedTextColor = OnSurface
                         ),
+                        shape = RoundedCornerShape(12.dp),
                         modifier = Modifier
                             .menuAnchor()
                             .fillMaxWidth()
@@ -146,11 +165,11 @@ fun AddExpenseDialog(
                     ExposedDropdownMenu(
                         expanded = expandedCategory,
                         onDismissRequest = { expandedCategory = false },
-                        modifier = androidx.compose.ui.Modifier.background(Slate900)
+                        modifier = androidx.compose.ui.Modifier.background(SurfaceContainerHigh)
                     ) {
                         categories.forEach { cat ->
                             DropdownMenuItem(
-                                text = { Text(cat, color = Color.White) },
+                                text = { Text(cat, color = OnSurface, fontSize = 13.sp) },
                                 onClick = {
                                     category = cat
                                     expandedCategory = false
@@ -160,7 +179,7 @@ fun AddExpenseDialog(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(18.dp))
+                Spacer(modifier = Modifier.height(20.dp))
 
                 // Buttons
                 Row(
@@ -168,7 +187,7 @@ fun AddExpenseDialog(
                     horizontalArrangement = Arrangement.End
                 ) {
                     TextButton(onClick = onDismiss) {
-                        Text("Cancelar", color = Slate400)
+                        Text("Cancelar", color = OnSurfaceVariant)
                     }
                     Spacer(modifier = Modifier.width(8.dp))
                     Button(
@@ -186,9 +205,10 @@ fun AddExpenseDialog(
                                 onDismiss()
                             }
                         },
-                        colors = ButtonDefaults.buttonColors(containerColor = Emerald600)
+                        colors = ButtonDefaults.buttonColors(containerColor = SecondaryContainer),
+                        shape = RoundedCornerShape(12.dp)
                     ) {
-                        Text("Guardar")
+                        Text("Guardar Movimiento", fontWeight = FontWeight.Bold)
                     }
                 }
             }

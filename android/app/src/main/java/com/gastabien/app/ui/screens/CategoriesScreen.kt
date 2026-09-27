@@ -1,5 +1,6 @@
 package com.gastabien.app.ui.screens
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -10,14 +11,16 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.gastabien.app.data.models.AnalyticsSummary
 import com.gastabien.app.ui.UiState
-import com.gastabien.app.ui.theme.*
 import com.gastabien.app.ui.components.BankFilterChips
+import com.gastabien.app.ui.components.getCategoryTheme
+import com.gastabien.app.ui.theme.*
 import java.text.NumberFormat
 import java.util.Locale
 
@@ -33,21 +36,35 @@ fun CategoriesScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Categorías de Gasto", fontWeight = FontWeight.Bold, color = Color.White) },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = Slate950)
+                title = {
+                    Column {
+                        Text(
+                            text = "Categorías",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 20.sp,
+                            color = OnSurface
+                        )
+                        Text(
+                            text = "Desglose automático por comercios RD",
+                            fontSize = 11.sp,
+                            color = OnSurfaceVariant
+                        )
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = Surface)
             )
         },
-        containerColor = Slate950
+        containerColor = Surface
     ) { padding ->
         when (summaryState) {
             is UiState.Loading -> {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator(color = Emerald400)
+                    CircularProgressIndicator(color = Secondary)
                 }
             }
             is UiState.Error -> {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text("Error al cargar categorías", color = Rose500)
+                    Text("Error al cargar categorías", color = ErrorColor)
                 }
             }
             is UiState.Success -> {
@@ -68,71 +85,128 @@ fun CategoriesScreen(
                         )
                     }
 
-                    item {
-                        Text(
-                            text = "Desglose Automático de Comercios",
-                            fontSize = 13.sp,
-                            color = Slate400,
-                            modifier = Modifier.padding(bottom = 4.dp)
-                        )
-                    }
-
-                    items(categories) { cat ->
-                        Card(
-                            shape = RoundedCornerShape(16.dp),
-                            colors = CardDefaults.cardColors(containerColor = Slate900),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Column(modifier = Modifier.padding(16.dp)) {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Text(
-                                        text = cat.category,
-                                        fontSize = 15.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = Color.White
-                                    )
-                                    Text(
-                                        text = dopFormat.format(cat.total),
-                                        fontSize = 15.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = Color.White
-                                    )
-                                }
-
-                                Spacer(modifier = Modifier.height(6.dp))
-
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween
-                                ) {
-                                    Text(
-                                        text = "${cat.count} movimientos",
-                                        fontSize = 12.sp,
-                                        color = Slate400
-                                    )
-                                    Text(
-                                        text = "${cat.percentage}%",
-                                        fontSize = 12.sp,
-                                        fontWeight = FontWeight.SemiBold,
-                                        color = Emerald400
-                                    )
-                                }
-
-                                Spacer(modifier = Modifier.height(8.dp))
-
-                                LinearProgressIndicator(
-                                    progress = { (cat.percentage / 100f).toFloat() },
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .height(6.dp)
-                                        .clip(CircleShape),
-                                    color = Emerald400,
-                                    trackColor = Slate800,
+                    if (categories.isEmpty()) {
+                        item {
+                            Surface(
+                                shape = RoundedCornerShape(18.dp),
+                                color = SurfaceContainerLow.copy(alpha = 0.85f),
+                                border = androidx.compose.foundation.BorderStroke(1.dp, OutlineVariant.copy(alpha = 0.25f)),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text(
+                                    text = "No hay gastos clasificados en este filtro bancario.",
+                                    fontSize = 13.sp,
+                                    color = OnSurfaceVariant,
+                                    modifier = Modifier.padding(20.dp)
                                 )
+                            }
+                        }
+                    } else {
+                        items(categories) { cat ->
+                            val theme = getCategoryTheme(cat.category)
+
+                            Surface(
+                                shape = RoundedCornerShape(18.dp),
+                                color = SurfaceContainerLow.copy(alpha = 0.85f),
+                                border = androidx.compose.foundation.BorderStroke(1.dp, OutlineVariant.copy(alpha = 0.25f)),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Box {
+                                    // Specular line
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .height(1.dp)
+                                            .background(
+                                                Brush.horizontalGradient(
+                                                    listOf(Color.Transparent, theme.color.copy(alpha = 0.35f), Color.Transparent)
+                                                )
+                                            )
+                                    )
+
+                                    Column(modifier = Modifier.padding(16.dp)) {
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                            ) {
+                                                Box(
+                                                    modifier = Modifier
+                                                        .size(36.dp)
+                                                        .clip(RoundedCornerShape(10.dp))
+                                                        .background(theme.containerColor),
+                                                    contentAlignment = Alignment.Center
+                                                ) {
+                                                    Icon(
+                                                        theme.icon,
+                                                        contentDescription = null,
+                                                        tint = theme.color,
+                                                        modifier = Modifier.size(20.dp)
+                                                    )
+                                                }
+
+                                                Text(
+                                                    text = cat.category,
+                                                    fontSize = 15.sp,
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = OnSurface
+                                                )
+                                            }
+
+                                            Text(
+                                                text = dopFormat.format(cat.total),
+                                                fontSize = 15.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = OnSurface
+                                            )
+                                        }
+
+                                        Spacer(modifier = Modifier.height(10.dp))
+
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.SpaceBetween
+                                        ) {
+                                            Text(
+                                                text = "${cat.count} movimientos bancarios",
+                                                fontSize = 12.sp,
+                                                color = OnSurfaceVariant
+                                            )
+                                            Text(
+                                                text = "${cat.percentage}%",
+                                                fontSize = 12.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = theme.color
+                                            )
+                                        }
+
+                                        Spacer(modifier = Modifier.height(8.dp))
+
+                                        Box(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .height(6.dp)
+                                                .clip(CircleShape)
+                                                .background(SurfaceContainerHighest)
+                                        ) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .fillMaxWidth((cat.percentage / 100f).toFloat().coerceIn(0.05f, 1f))
+                                                    .fillMaxHeight()
+                                                    .clip(CircleShape)
+                                                    .background(
+                                                        Brush.horizontalGradient(
+                                                            listOf(theme.color.copy(alpha = 0.7f), theme.color)
+                                                        )
+                                                    )
+                                            )
+                                        }
+                                    }
+                                }
                             }
                         }
                     }

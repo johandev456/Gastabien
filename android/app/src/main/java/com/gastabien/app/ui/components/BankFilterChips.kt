@@ -2,7 +2,6 @@ package com.gastabien.app.ui.components
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
@@ -10,9 +9,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AccountBalance
 import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Layers
+import androidx.compose.material.icons.filled.FilterAlt
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -33,11 +31,11 @@ data class BankFilterOption(
 )
 
 val DOMINICAN_BANKS = listOf(
-    BankFilterOption("ALL", "Todos los Bancos", "Todos", Emerald400),
-    BankFilterOption("POPULAR", "Banco Popular", "Popular", BankPopular),
-    BankFilterOption("BHD", "Banco BHD", "BHD", BankBhd),
-    BankFilterOption("PROMERICA", "Banco Promerica", "Promerica", BankPromerica),
-    BankFilterOption("QIK", "Qik Banco Digital", "Qik", BankQik)
+    BankFilterOption("ALL", "Todos los Bancos", "Todos", Primary),
+    BankFilterOption("POPULAR", "Banco Popular", "Popular", BankPopularAccent),
+    BankFilterOption("BHD", "Banco BHD", "BHD", BankBhdAccent),
+    BankFilterOption("PROMERICA", "Banco Promerica", "Promerica", BankPromericaAccent),
+    BankFilterOption("QIK", "Qik Banco Digital", "Qik", BankQikAccent)
 )
 
 @Composable
@@ -60,32 +58,31 @@ fun BankFilterChips(
             val isSelected = selectedBank.equals(bank.code, ignoreCase = true)
 
             Surface(
-                shape = RoundedCornerShape(20.dp),
+                shape = RoundedCornerShape(12.dp),
                 color = if (isSelected) {
-                    bank.color.copy(alpha = 0.2f)
+                    bank.color.copy(alpha = 0.16f)
                 } else {
-                    Slate900
+                    SurfaceContainerLow.copy(alpha = 0.8f)
                 },
                 border = BorderStroke(
                     width = if (isSelected) 1.5.dp else 1.dp,
-                    color = if (isSelected) bank.color else Slate800
+                    color = if (isSelected) bank.color else OutlineVariant.copy(alpha = 0.35f)
                 ),
                 modifier = Modifier
-                    .clip(RoundedCornerShape(20.dp))
+                    .clip(RoundedCornerShape(12.dp))
                     .clickable { onSelectBank(bank.code) }
             ) {
                 Row(
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
+                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    // Small Bank Dot or Icon
                     if (bank.code == "ALL") {
                         Icon(
-                            imageVector = if (isSelected) Icons.Default.Check else Icons.Default.Layers,
+                            imageVector = if (isSelected) Icons.Default.Check else Icons.Default.FilterAlt,
                             contentDescription = null,
-                            tint = if (isSelected) Emerald400 else Slate400,
-                            modifier = Modifier.size(14.dp)
+                            tint = if (isSelected) Primary else OnSurfaceVariant,
+                            modifier = Modifier.size(13.dp)
                         )
                     } else {
                         Box(
@@ -100,10 +97,11 @@ fun BankFilterChips(
                         text = bank.shortName,
                         fontSize = 12.sp,
                         fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                        color = if (isSelected) Color.White else Slate400
+                        color = if (isSelected) OnSurface else OnSurfaceVariant
                     )
                 }
             }
         }
     }
 }
+

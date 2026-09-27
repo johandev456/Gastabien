@@ -21,14 +21,11 @@ import androidx.navigation.compose.rememberNavController
 import com.gastabien.app.data.models.*
 import com.gastabien.app.ui.MainViewModel
 import com.gastabien.app.ui.screens.*
-import com.gastabien.app.ui.theme.Emerald400
-import com.gastabien.app.ui.theme.GastaBienTheme
-import com.gastabien.app.ui.theme.Slate900
-import com.gastabien.app.ui.theme.Slate950
+import com.gastabien.app.ui.theme.*
 
 sealed class BottomNavItem(val route: String, val title: String, val icon: ImageVector) {
-    object Dashboard : BottomNavItem("dashboard", "Resumen", Icons.Default.Home)
-    object Transactions : BottomNavItem("transactions", "Movimientos", Icons.Default.Receipt)
+    object Dashboard : BottomNavItem("dashboard", "Resumen", Icons.Default.Dashboard)
+    object Transactions : BottomNavItem("transactions", "Movimientos", Icons.Default.ReceiptLong)
     object Categories : BottomNavItem("categories", "Categorías", Icons.Default.PieChart)
     object Banks : BottomNavItem("banks", "Bancos", Icons.Default.AccountBalance)
 }
@@ -69,11 +66,11 @@ class MainActivity : ComponentActivity() {
 
                 Scaffold(
                     modifier = Modifier.fillMaxSize(),
-                    containerColor = Slate950,
+                    containerColor = Surface,
                     bottomBar = {
                         NavigationBar(
-                            containerColor = Slate900,
-                            contentColor = Color.White
+                            containerColor = SurfaceContainerLow,
+                            contentColor = OnSurface
                         ) {
                             val navBackStackEntry by navController.currentBackStackEntryAsState()
                             val currentRoute = navBackStackEntry?.destination?.route
@@ -84,11 +81,11 @@ class MainActivity : ComponentActivity() {
                                     label = { Text(item.title) },
                                     selected = currentRoute == item.route,
                                     colors = NavigationBarItemDefaults.colors(
-                                        selectedIconColor = Emerald400,
-                                        selectedTextColor = Emerald400,
-                                        indicatorColor = Slate950,
-                                        unselectedIconColor = Color.Gray,
-                                        unselectedTextColor = Color.Gray
+                                        selectedIconColor = Secondary,
+                                        selectedTextColor = Secondary,
+                                        indicatorColor = SurfaceContainerHigh,
+                                        unselectedIconColor = OnSurfaceVariant,
+                                        unselectedTextColor = OnSurfaceVariant
                                     ),
                                     onClick = {
                                         if (currentRoute != item.route) {

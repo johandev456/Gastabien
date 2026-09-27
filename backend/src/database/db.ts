@@ -2,6 +2,7 @@ import path from 'path';
 import fs from 'fs';
 import { Transaction, Category, BankCode, TransactionType } from '../types';
 import { v4 as uuidv4 } from 'uuid';
+import { categorizationService } from '../services/categorization.service';
 
 interface UserRecord {
   id: string;
@@ -86,6 +87,21 @@ export function initDatabase() {
         ignored_external_ids: loaded.ignored_external_ids || {},
         oauth_config: loaded.oauth_config || undefined
       };
+
+      // Re-categorize transactions with updated business rules
+      let changed = false;
+      for (const tx of Object.values(memoryDb.transactions)) {
+        if (!tx.isManual) {
+          const freshCategory = categorizationService.categorize(tx.merchant, tx.description, tx.type);
+          if (freshCategory !== tx.category) {
+            tx.category = freshCategory;
+            changed = true;
+          }
+        }
+      }
+      if (changed) {
+        saveDatabase();
+      }
     }
   } catch (err) {
     console.warn('Could not read existing database, initializing new memory database:', err);
