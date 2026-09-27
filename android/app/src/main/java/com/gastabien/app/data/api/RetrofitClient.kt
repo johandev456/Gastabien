@@ -7,8 +7,8 @@ import retrofit2.converter.gson.GsonConverterFactory
 import java.util.concurrent.TimeUnit
 
 object RetrofitClient {
-    // Direct Android emulator loopback to host PC backend (100% stable, no tunnel timeout)
-    private var baseUrl: String = "http://10.0.2.2:4000/"
+    // Production Live Backend on Render.com
+    private var baseUrl: String = "https://gastabien.onrender.com/"
 
     fun setBaseUrl(url: String) {
         baseUrl = if (url.endsWith("/")) url else "$url/"
