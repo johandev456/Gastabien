@@ -86,7 +86,11 @@ class MainViewModel : ViewModel() {
             _isSyncing.value = true
             try {
                 val res = api.simulateSync()
-                _syncMessage.value = "¡Sincronizado! Se procesaron ${res.emailsProcessed} correos bancarios."
+                if (res.newTransactionsCount > 0) {
+                    _syncMessage.value = "¡Sincronizado! Se agregaron ${res.newTransactionsCount} movimientos nuevos."
+                } else {
+                    _syncMessage.value = "¡Todo al día! No hay transacciones nuevas tras el estado de cuenta."
+                }
                 refreshAll()
             } catch (e: Exception) {
                 _syncMessage.value = "Error al sincronizar: ${e.localizedMessage}"

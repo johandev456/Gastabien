@@ -15,9 +15,18 @@ class SyncService {
                 const parsed = parser_factory_1.bankParserFactory.parseEmail(email);
                 if (!parsed)
                     continue;
-                // Deduplication check
-                const exists = db_1.dbOps.transactionExists(userId, parsed.externalId || '');
-                if (exists)
+                // Multi-tier Deduplication check
+                const dupCheck = db_1.dbOps.isDuplicateTransaction(userId, {
+                    bank: parsed.bank,
+                    type: parsed.type,
+                    amount: parsed.amount,
+                    currency: parsed.currency,
+                    merchant: parsed.merchant,
+                    description: parsed.description,
+                    date: parsed.date,
+                    externalId: parsed.externalId
+                });
+                if (dupCheck.isDuplicate)
                     continue;
                 // Auto Categorization
                 const category = categorization_service_1.categorizationService.categorize(parsed.merchant, parsed.description, parsed.type);
@@ -153,8 +162,17 @@ class SyncService {
             const parsed = parser_factory_1.bankParserFactory.parseEmail(email);
             if (!parsed)
                 continue;
-            const exists = db_1.dbOps.transactionExists(userId, parsed.externalId || '');
-            if (exists)
+            const dupCheck = db_1.dbOps.isDuplicateTransaction(userId, {
+                bank: parsed.bank,
+                type: parsed.type,
+                amount: parsed.amount,
+                currency: parsed.currency,
+                merchant: parsed.merchant,
+                description: parsed.description,
+                date: parsed.date,
+                externalId: parsed.externalId
+            });
+            if (dupCheck.isDuplicate)
                 continue;
             const category = categorization_service_1.categorizationService.categorize(parsed.merchant, parsed.description, parsed.type);
             const newTx = db_1.dbOps.createTransaction({

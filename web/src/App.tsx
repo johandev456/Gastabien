@@ -106,11 +106,13 @@ export function App() {
     setIsSyncing(true);
     try {
       if (isGmailConnected) {
-        const res = await ApiClient.triggerResyncGmail();
+        const res = await ApiClient.triggerSyncGmail();
         if (res.status === 'SUCCESS') {
           showToast(
             'success',
-            `¡Gmail escaneado con éxito! Se revisaron ${res.emailsProcessed} correos y se agregaron ${res.newTransactionsCount} movimientos.`
+            res.newTransactionsCount > 0
+              ? `¡Gmail escaneado con éxito! Se revisaron ${res.emailsProcessed} correos y se agregaron ${res.newTransactionsCount} movimientos nuevos.`
+              : '¡Todo al día! No hay transacciones nuevas (todos los movimientos coinciden con el estado de cuenta).'
           );
         } else {
           showToast('error', (res as any).error || 'Error al sincronizar con Gmail');
@@ -119,7 +121,9 @@ export function App() {
         const res = await ApiClient.triggerSimulateSync();
         showToast(
           'success',
-          `¡Sincronización completada! Se procesaron ${res.emailsProcessed} correos bancarios y se registraron ${res.newTransactionsCount} movimientos nuevos.`
+          res.newTransactionsCount > 0
+            ? `¡Sincronización completada! Se procesaron ${res.emailsProcessed} correos bancarios y se registraron ${res.newTransactionsCount} movimientos nuevos.`
+            : '¡Todo al día! No hay transacciones nuevas (todos los movimientos ya coinciden con tu estado de cuenta).'
         );
       }
       await loadData(selectedBanks);

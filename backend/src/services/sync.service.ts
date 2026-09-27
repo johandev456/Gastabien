@@ -21,9 +21,18 @@ export class SyncService {
         const parsed = bankParserFactory.parseEmail(email);
         if (!parsed) continue;
 
-        // Deduplication check
-        const exists = dbOps.transactionExists(userId, parsed.externalId || '');
-        if (exists) continue;
+        // Multi-tier Deduplication check
+        const dupCheck = dbOps.isDuplicateTransaction(userId, {
+          bank: parsed.bank,
+          type: parsed.type,
+          amount: parsed.amount,
+          currency: parsed.currency,
+          merchant: parsed.merchant,
+          description: parsed.description,
+          date: parsed.date,
+          externalId: parsed.externalId
+        });
+        if (dupCheck.isDuplicate) continue;
 
         // Auto Categorization
         const category = categorizationService.categorize(parsed.merchant, parsed.description, parsed.type);
@@ -166,8 +175,17 @@ export class SyncService {
       const parsed = bankParserFactory.parseEmail(email);
       if (!parsed) continue;
 
-      const exists = dbOps.transactionExists(userId, parsed.externalId || '');
-      if (exists) continue;
+      const dupCheck = dbOps.isDuplicateTransaction(userId, {
+        bank: parsed.bank,
+        type: parsed.type,
+        amount: parsed.amount,
+        currency: parsed.currency,
+        merchant: parsed.merchant,
+        description: parsed.description,
+        date: parsed.date,
+        externalId: parsed.externalId
+      });
+      if (dupCheck.isDuplicate) continue;
 
       const category = categorizationService.categorize(parsed.merchant, parsed.description, parsed.type);
 

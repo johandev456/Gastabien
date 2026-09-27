@@ -465,6 +465,8 @@ export class StatementService {
     }
 
     if (minDateStr && maxDateStr) {
+      dbOps.saveReconciledPeriod(userId, bankCode, minDateStr, maxDateStr);
+
       const minTime = new Date(`${minDateStr}T00:00:00.000Z`).getTime() - (24 * 3600 * 1000);
       const maxTime = new Date(`${maxDateStr}T23:59:59.999Z`).getTime() + (24 * 3600 * 1000);
 
@@ -475,6 +477,9 @@ export class StatementService {
         const txTime = new Date(tx.date).getTime();
         // If it falls within the statement date window but was NOT in the statement, it's a ghost/declined/canceled email transaction!
         if (txTime >= minTime && txTime <= maxTime) {
+          if (tx.externalId) {
+            dbOps.ignoreExternalId(userId, tx.externalId);
+          }
           dbOps.deleteTransaction(userId, tx.id);
           report.removedCount++;
           report.items.push({
