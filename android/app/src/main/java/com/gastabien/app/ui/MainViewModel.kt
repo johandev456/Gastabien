@@ -18,7 +18,8 @@ sealed class UiState<out T> {
 
 class MainViewModel : ViewModel() {
 
-    private val api = RetrofitClient.apiService
+    private val api: ApiService
+        get() = RetrofitClient.apiService
 
     private val _summaryState = MutableStateFlow<UiState<AnalyticsSummary>>(UiState.Loading)
     val summaryState: StateFlow<UiState<AnalyticsSummary>> = _summaryState.asStateFlow()
