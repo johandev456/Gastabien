@@ -55,14 +55,9 @@ class BhdParser extends base_parser_1.BaseBankParser {
             return null;
         // Extract Merchant / Destination
         let merchant = '';
-        if (/cargo por servicio|notificaci[oó]n sms|comisi[oó]n/i.test(fullText) || /notificaci[oó]n sms/i.test(subject)) {
-            merchant = 'Cargo por Notificación SMS';
-        }
-        if (!merchant) {
-            const labeledMerchant = fullText.match(/(?:comercio|establecimiento|negocio|beneficiario|a favor de)\s*:\s*([^\n\r<]{3,80})/i);
-            if (labeledMerchant && labeledMerchant[1]) {
-                merchant = this.cleanMerchantName(labeledMerchant[1]);
-            }
+        const labeledMerchant = fullText.match(/(?:comercio|establecimiento|negocio|beneficiario|a favor de|proveedor)\s*:\s*([^\n\r<]{3,80})/i);
+        if (labeledMerchant && labeledMerchant[1]) {
+            merchant = this.cleanMerchantName(labeledMerchant[1]);
         }
         if (!merchant) {
             const inlineMatch = fullText.match(/(?:consumo en|compra en|pago a|debito por|débito por)\s+([^,\n\r<]{3,60}?)(?:\s+por|\s+con|\s+el|\s+en\s+fecha|\.|\,|$)/i);
@@ -75,7 +70,7 @@ class BhdParser extends base_parser_1.BaseBankParser {
                 merchant = 'Depósito / Abono BHD';
             }
             else {
-                merchant = 'Consumo Tarjeta BHD';
+                return null;
             }
         }
         // Account or Card reference

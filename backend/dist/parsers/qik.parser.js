@@ -78,7 +78,7 @@ class QikParser extends base_parser_1.BaseBankParser {
                 merchant = 'Transferencia Recibida Qik';
             }
             else {
-                merchant = 'Transacción Qik Digital';
+                return null;
             }
         }
         // Account or Card reference

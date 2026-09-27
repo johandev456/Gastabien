@@ -501,13 +501,30 @@ class StatementService {
                 }
             }
         }
-        // Save reconciled period for deduplication without destructive deletions
+        // Purge unmatched phantom email transactions within the statement date range
         if (entries.length > 0) {
             const sortedDates = entries.map(e => e.date).sort();
             const minDateStr = sortedDates[0];
             const maxDateStr = sortedDates[sortedDates.length - 1];
             if (minDateStr && maxDateStr) {
                 db_1.dbOps.saveReconciledPeriod(userId, bankCode, minDateStr, maxDateStr);
+                const startTime = new Date(`${minDateStr}T00:00:00.000Z`).getTime();
+                const endTime = new Date(`${maxDateStr}T23:59:59.999Z`).getTime();
+                for (const tx of existingTransactions) {
+                    if (usedTxIds.has(tx.id))
+                        continue;
+                    if (tx.isManual)
+                        continue; // preserve user-created manual notes
+                    const txTime = new Date(tx.date).getTime();
+                    if (txTime >= startTime && txTime <= endTime) {
+                        // Unmatched email transaction in statement period (ghost or declined authorization)
+                        if (tx.externalId) {
+                            db_1.dbOps.ignoreExternalId(userId, tx.externalId);
+                        }
+                        db_1.dbOps.deleteTransaction(userId, tx.id);
+                        report.removedCount++;
+                    }
+                }
             }
         }
         report.totalIncomeAmount = Math.round(report.totalIncomeAmount * 100) / 100;

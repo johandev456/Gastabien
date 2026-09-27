@@ -93,29 +93,21 @@ class PromericaParser extends base_parser_1.BaseBankParser {
                 merchant = 'Depósito / Transferencia Recibida';
             }
         }
-        // C. Check SMS alert fee
-        else if (/notificaci[oó]n\s*sms|alerta\s*sms|cargo\s*por\s*servicio|comisi[oó]n/i.test(fullText) || /notificaci[oó]n\s*sms/i.test(subject)) {
-            merchant = 'Cargo por Notificación SMS';
-        }
-        // D. Standard Merchant Extraction
+        // C. Standard Merchant Extraction for Purchases
         else {
-            const lineMatches = fullText.match(/(?:comercio|establecimiento|lugar|negocio)\s*:\s*([^\n\r<]{3,80})/i);
+            const lineMatches = fullText.match(/(?:comercio|establecimiento|lugar|negocio|proveedor|afiliado)\s*:\s*([^\n\r<]{3,80})/i);
             if (lineMatches && lineMatches[1]) {
                 merchant = this.cleanMerchantName(lineMatches[1]);
             }
             if (!merchant) {
-                const inlineMatch = fullText.match(/(?:consumo en|compra en|realizada en)\s+([^,\n\r<]{3,60}?)(?:\s+por|\s+con|\s+el|\s+en\s+fecha|\.|\,|$)/i);
+                const inlineMatch = fullText.match(/(?:consumo en|compra en|realizada en|cargo en|pago a)\s+([^,\n\r<]{3,60}?)(?:\s+por|\s+con|\s+el|\s+en\s+fecha|\.|\,|$)/i);
                 if (inlineMatch && inlineMatch[1]) {
                     merchant = this.cleanMerchantName(inlineMatch[1]);
                 }
             }
+            // If no valid merchant or transaction context was found, do NOT create a phantom transaction
             if (!merchant || merchant.length < 2) {
-                if (amount <= 10) {
-                    merchant = 'Cargo por Notificación SMS';
-                }
-                else {
-                    merchant = 'Consumo Tarjeta Promerica';
-                }
+                return null;
             }
         }
         // Extract card reference

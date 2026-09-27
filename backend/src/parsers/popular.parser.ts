@@ -97,8 +97,6 @@ export class PopularParser extends BaseBankParser {
       } else {
         merchant = 'Depósito en Cuenta Popular';
       }
-    } else if (/cargo por servicio|notificaci[oó]n sms|comisi[oó]n/i.test(fullText) || /notificaci[oó]n sms/i.test(subject)) {
-      merchant = 'Cargo por Notificación SMS';
     } else {
       const labeledMerchant = fullText.match(/(?:establecimiento|comercio|lugar|beneficiario|negocio)\s*:\s*([^\n\r<]{3,80})/i);
       if (labeledMerchant && labeledMerchant[1]) {
@@ -113,7 +111,7 @@ export class PopularParser extends BaseBankParser {
       }
 
       if (!merchant || merchant.length < 2) {
-        merchant = 'Compra con Tarjeta Popular';
+        return null;
       }
     }
 

@@ -89,7 +89,7 @@ export class QikParser extends BaseBankParser {
       if (type === 'INCOME') {
         merchant = 'Transferencia Recibida Qik';
       } else {
-        merchant = 'Transacción Qik Digital';
+        return null;
       }
     }
 
