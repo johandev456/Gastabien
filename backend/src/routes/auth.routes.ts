@@ -9,6 +9,14 @@ const router = Router();
 router.get('/google/url', (req, res) => {
   const userId = (req.query.userId as string) || 'demo-user-id';
   try {
+    const savedConfig = dbOps.getGoogleConfig();
+    if (savedConfig?.clientId && (!CONFIG.GOOGLE.CLIENT_ID || CONFIG.GOOGLE.CLIENT_ID.length < 5)) {
+      CONFIG.GOOGLE.CLIENT_ID = savedConfig.clientId;
+    }
+    if (savedConfig?.clientSecret && (!CONFIG.GOOGLE.CLIENT_SECRET || CONFIG.GOOGLE.CLIENT_SECRET.length < 5)) {
+      CONFIG.GOOGLE.CLIENT_SECRET = savedConfig.clientSecret;
+    }
+
     if (!CONFIG.GOOGLE.CLIENT_ID || !CONFIG.GOOGLE.CLIENT_SECRET) {
       return res.json({
         configured: false,
@@ -31,6 +39,7 @@ router.post('/google/config', (req, res) => {
   }
   CONFIG.GOOGLE.CLIENT_ID = clientId.trim();
   CONFIG.GOOGLE.CLIENT_SECRET = clientSecret.trim();
+  dbOps.saveGoogleConfig(clientId.trim(), clientSecret.trim());
   return res.json({
     success: true,
     message: 'Credenciales de Google OAuth guardadas exitosamente.',

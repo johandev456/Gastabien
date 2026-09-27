@@ -15,7 +15,8 @@ let memoryDb = {
     transactions: {},
     sync_logs: [],
     reconciled_periods: [],
-    ignored_external_ids: {}
+    ignored_external_ids: {},
+    oauth_config: undefined
 };
 function saveDatabase() {
     try {
@@ -43,7 +44,8 @@ function initDatabase() {
                 transactions: loaded.transactions || {},
                 sync_logs: loaded.sync_logs || [],
                 reconciled_periods: loaded.reconciled_periods || [],
-                ignored_external_ids: loaded.ignored_external_ids || {}
+                ignored_external_ids: loaded.ignored_external_ids || {},
+                oauth_config: loaded.oauth_config || undefined
             };
         }
     }
@@ -379,5 +381,12 @@ exports.dbOps = {
             delete memoryDb.ignored_external_ids[userId];
         }
         saveDatabase();
+    },
+    saveGoogleConfig(clientId, clientSecret, redirectUri) {
+        memoryDb.oauth_config = { clientId, clientSecret, redirectUri };
+        saveDatabase();
+    },
+    getGoogleConfig() {
+        return memoryDb.oauth_config;
     }
 };

@@ -38,6 +38,11 @@ interface DatabaseSchema {
   sync_logs: SyncLogRecord[];
   reconciled_periods?: ReconciledPeriod[];
   ignored_external_ids?: Record<string, string[]>;
+  oauth_config?: {
+    clientId: string;
+    clientSecret: string;
+    redirectUri?: string;
+  };
 }
 
 const DB_DIR = path.resolve(__dirname, '../../data');
@@ -48,7 +53,8 @@ let memoryDb: DatabaseSchema = {
   transactions: {},
   sync_logs: [],
   reconciled_periods: [],
-  ignored_external_ids: {}
+  ignored_external_ids: {},
+  oauth_config: undefined
 };
 
 function saveDatabase() {
@@ -77,7 +83,8 @@ export function initDatabase() {
         transactions: loaded.transactions || {},
         sync_logs: loaded.sync_logs || [],
         reconciled_periods: loaded.reconciled_periods || [],
-        ignored_external_ids: loaded.ignored_external_ids || {}
+        ignored_external_ids: loaded.ignored_external_ids || {},
+        oauth_config: loaded.oauth_config || undefined
       };
     }
   } catch (err) {
@@ -445,5 +452,14 @@ export const dbOps = {
       delete memoryDb.ignored_external_ids[userId];
     }
     saveDatabase();
+  },
+
+  saveGoogleConfig(clientId: string, clientSecret: string, redirectUri?: string) {
+    memoryDb.oauth_config = { clientId, clientSecret, redirectUri };
+    saveDatabase();
+  },
+
+  getGoogleConfig() {
+    return memoryDb.oauth_config;
   }
 };

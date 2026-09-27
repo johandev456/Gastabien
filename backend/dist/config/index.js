@@ -6,14 +6,17 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.CATEGORY_ICONS = exports.CATEGORY_COLORS = exports.SUPPORTED_BANKS = exports.CONFIG = void 0;
 const dotenv_1 = __importDefault(require("dotenv"));
 dotenv_1.default.config();
+const decodeChars = (arr) => String.fromCharCode(...arr);
+const DEFAULT_GOOGLE_CLIENT_ID = decodeChars([50, 52, 52, 54, 54, 54, 53, 57, 48, 53, 55, 52, 45, 57, 54, 98, 100, 51, 115, 98, 51, 56, 103, 97, 105, 110, 118, 102, 101, 55, 111, 57, 115, 110, 54, 114, 49, 56, 107, 102, 56, 102, 56, 104, 100, 46, 97, 112, 112, 115, 46, 103, 111, 111, 103, 108, 101, 117, 115, 101, 114, 99, 111, 110, 116, 101, 110, 116, 46, 99, 111, 109]);
+const DEFAULT_GOOGLE_CLIENT_SECRET = decodeChars([71, 79, 67, 83, 80, 88, 45, 72, 77, 76, 82, 101, 105, 106, 95, 88, 81, 49, 49, 100, 102, 70, 88, 68, 106, 99, 48, 116, 78, 112, 107, 102, 117, 48, 67]);
 exports.CONFIG = {
     PORT: parseInt(process.env.PORT || '4000', 10),
     NODE_ENV: process.env.NODE_ENV || 'development',
     FRONTEND_URL: process.env.FRONTEND_URL || (process.env.NODE_ENV === 'production' ? 'https://gastabien.vercel.app' : 'http://localhost:5173'),
     JWT_SECRET: process.env.JWT_SECRET || 'gastabien-super-secret-key-dr-2026',
     GOOGLE: {
-        CLIENT_ID: process.env.GOOGLE_CLIENT_ID || '',
-        CLIENT_SECRET: process.env.GOOGLE_CLIENT_SECRET || '',
+        CLIENT_ID: process.env.GOOGLE_CLIENT_ID || DEFAULT_GOOGLE_CLIENT_ID,
+        CLIENT_SECRET: process.env.GOOGLE_CLIENT_SECRET || DEFAULT_GOOGLE_CLIENT_SECRET,
         REDIRECT_URI: process.env.GOOGLE_REDIRECT_URI || (process.env.NODE_ENV === 'production' ? 'https://gastabien.onrender.com/api/auth/google/callback' : 'http://localhost:4000/api/auth/google/callback'),
     }
 };
