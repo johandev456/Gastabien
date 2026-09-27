@@ -1,17 +1,5 @@
 import React, { useState } from 'react';
 import { Transaction, BankCode, Category } from '../types';
-import { 
-  Search, 
-  Filter, 
-  Trash2, 
-  Edit3, 
-  ArrowDownLeft, 
-  ArrowUpRight,
-  CreditCard,
-  Tag,
-  Check,
-  X
-} from 'lucide-react';
 
 interface TransactionListProps {
   transactions: Transaction[];
@@ -42,9 +30,9 @@ export const TransactionList: React.FC<TransactionListProps> = ({
   loading = false
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
-  const [selectedBank, setSelectedBank] = useState<string>('ALL');
   const [selectedCategory, setSelectedCategory] = useState<string>('ALL');
   const [selectedType, setSelectedType] = useState<string>('ALL');
+  const [showAllTable, setShowAllTable] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [tempCategory, setTempCategory] = useState<Category>('Otros Gastos');
 
@@ -62,277 +50,292 @@ export const TransactionList: React.FC<TransactionListProps> = ({
       return d.toLocaleDateString('es-DO', {
         month: 'short',
         day: 'numeric',
-        year: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit'
+        year: 'numeric'
       });
     } catch {
       return isoString;
     }
   };
 
-  const getBankBadgeStyle = (bank: BankCode) => {
+  const getBankBadge = (bank: BankCode) => {
     switch (bank) {
-      case 'POPULAR':
-        return 'bg-blue-950 text-blue-300 border-blue-800/60';
-      case 'BHD':
-        return 'bg-emerald-950 text-emerald-300 border-emerald-800/60';
       case 'PROMERICA':
-        return 'bg-teal-950 text-teal-300 border-teal-800/60';
+        return {
+          label: 'Promerica',
+          className: 'bg-secondary-container/20 text-secondary'
+        };
+      case 'POPULAR':
+        return {
+          label: 'Popular',
+          className: 'bg-primary-container/20 text-primary'
+        };
+      case 'BHD':
+        return {
+          label: 'BHD',
+          className: 'bg-tertiary-container/20 text-tertiary'
+        };
       case 'QIK':
-        return 'bg-purple-950 text-purple-300 border-purple-800/60';
+        return {
+          label: 'Qik Digital',
+          className: 'bg-secondary-fixed/20 text-secondary-fixed'
+        };
       default:
-        return 'bg-slate-800 text-slate-300 border-slate-700';
+        return {
+          label: bank,
+          className: 'bg-surface-container-high text-on-surface-variant'
+        };
     }
   };
 
-  // Filter transactions
-  const filtered = transactions.filter(tx => {
-    const matchesSearch = 
+  const filtered = transactions.filter((tx) => {
+    const matchesSearch =
       tx.merchant.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (tx.description && tx.description.toLowerCase().includes(searchTerm.toLowerCase())) ||
-      (tx.accountReference && tx.accountReference.toLowerCase().includes(searchTerm.toLowerCase()));
-
-    const matchesBank = selectedBank === 'ALL' || tx.bank === selectedBank;
+      (tx.notes && tx.notes.toLowerCase().includes(searchTerm.toLowerCase()));
     const matchesCategory = selectedCategory === 'ALL' || tx.category === selectedCategory;
     const matchesType = selectedType === 'ALL' || tx.type === selectedType;
-
-    return matchesSearch && matchesBank && matchesCategory && matchesType;
+    return matchesSearch && matchesCategory && matchesType;
   });
 
-  const startEdit = (tx: Transaction) => {
-    setEditingId(tx.id);
-    setTempCategory(tx.category);
-  };
-
-  const saveEdit = (id: string) => {
-    onUpdateCategory(id, tempCategory);
-    setEditingId(null);
-  };
+  const previewList = transactions.slice(0, 4);
 
   return (
-    <div className="glass-card rounded-2xl p-6">
+    <div className="relative overflow-hidden rounded-2xl bg-surface-container-low/60 backdrop-blur-2xl p-6 shadow-[0_20px_44px_-10px_rgba(0,0,0,0.5)] border border-outline-variant/20">
+      <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-primary-container/40 to-transparent"></div>
       
-      {/* Header & Filters */}
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 mb-6">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-5">
         <div>
-          <h3 className="text-lg font-bold text-white flex items-center gap-2">
-            Registro de Movimientos
-            <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-emerald-950 text-emerald-400 border border-emerald-800/40">
-              {filtered.length} transacciones
-            </span>
-          </h3>
-          <p className="text-xs text-slate-400">Extracción de correos y registros manuales</p>
+          <h2 className="font-headline-sm text-lg sm:text-xl text-on-surface font-bold">
+            Últimas Transacciones Sincronizadas
+          </h2>
+          <p className="font-body-sm text-[13px] text-on-surface-variant">
+            Lectura automatizada por push notifications & extractos RD
+          </p>
         </div>
-
-        {/* Search Bar */}
-        <div className="relative flex-1 max-w-md">
-          <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-          <input
-            type="text"
-            placeholder="Buscar por comercio (Total, Sirena, Netflix...)"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full bg-slate-900 border border-slate-800 rounded-xl pl-9 pr-4 py-2 text-xs sm:text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:border-emerald-500 transition-all"
-          />
-        </div>
+        <button
+          onClick={() => setShowAllTable(!showAllTable)}
+          type="button"
+          className="inline-flex items-center gap-1.5 text-primary font-body-sm text-[13px] hover:underline font-semibold cursor-pointer"
+        >
+          <span>{showAllTable ? 'Mostrar Vista Resumida' : `Ver todas las ${transactions.length} transacciones`}</span>
+          <span className="material-symbols-outlined text-[16px]">
+            {showAllTable ? 'expand_less' : 'arrow_forward'}
+          </span>
+        </button>
       </div>
 
-      {/* Filter Chips Bar */}
-      <div className="flex flex-wrap items-center gap-2 mb-6 pb-4 border-b border-slate-800/80 text-xs">
-        <span className="text-slate-400 flex items-center gap-1 mr-1">
-          <Filter className="w-3.5 h-3.5" /> Filtros:
-        </span>
-
-        {/* Bank Filter */}
-        <select
-          value={selectedBank}
-          onChange={(e) => setSelectedBank(e.target.value)}
-          className="bg-slate-900 border border-slate-800 text-slate-300 rounded-lg px-2.5 py-1.5 focus:outline-none focus:border-emerald-500"
-        >
-          <option value="ALL">Todos los Bancos</option>
-          <option value="POPULAR">Banco Popular</option>
-          <option value="BHD">Banco BHD</option>
-          <option value="PROMERICA">Promerica</option>
-          <option value="QIK">Qik Banco Digital</option>
-          <option value="MANUAL">Manual</option>
-        </select>
-
-        {/* Category Filter */}
-        <select
-          value={selectedCategory}
-          onChange={(e) => setSelectedCategory(e.target.value)}
-          className="bg-slate-900 border border-slate-800 text-slate-300 rounded-lg px-2.5 py-1.5 focus:outline-none focus:border-emerald-500"
-        >
-          <option value="ALL">Todas las Categorías</option>
-          {CATEGORIES.map(c => (
-            <option key={c} value={c}>{c}</option>
-          ))}
-        </select>
-
-        {/* Type Filter */}
-        <select
-          value={selectedType}
-          onChange={(e) => setSelectedType(e.target.value)}
-          className="bg-slate-900 border border-slate-800 text-slate-300 rounded-lg px-2.5 py-1.5 focus:outline-none focus:border-emerald-500"
-        >
-          <option value="ALL">Todos los Tipos</option>
-          <option value="EXPENSE">Gastos (-)</option>
-          <option value="INCOME">Ingresos (+)</option>
-        </select>
-
-        {(selectedBank !== 'ALL' || selectedCategory !== 'ALL' || selectedType !== 'ALL' || searchTerm) && (
-          <button
-            onClick={() => {
-              setSelectedBank('ALL');
-              setSelectedCategory('ALL');
-              setSelectedType('ALL');
-              setSearchTerm('');
-            }}
-            className="text-slate-400 hover:text-rose-400 text-xs underline ml-auto"
-          >
-            Limpiar filtros
-          </button>
-        )}
-      </div>
-
-      {filtered.length === 0 ? (
-        <div className="py-12 text-center">
-          <p className="text-slate-400 font-medium">No se encontraron transacciones registradas.</p>
-          <p className="text-xs text-slate-500 mt-1">Sube tu Estado de Cuenta o conecta tu correo para comenzar.</p>
-        </div>
-      ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs sm:text-sm">
-            <thead>
-              <tr className="text-[11px] uppercase tracking-wider text-slate-400 border-b border-slate-800/80">
-                <th className="pb-3 pl-2">Comercio & Detalle</th>
-                <th className="pb-3">Banco / Cuenta</th>
-                <th className="pb-3">Categoría</th>
-                <th className="pb-3">Fecha</th>
-                <th className="pb-3 text-right">Monto</th>
-                <th className="pb-3 pr-2 text-right">Acciones</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-800/50">
-              {filtered.map((tx) => {
-                const isExpense = tx.type === 'EXPENSE';
-                const isEditing = editingId === tx.id;
-
-                return (
-                  <tr key={tx.id} className="hover:bg-slate-900/60 transition-colors group">
-                    
-                    {/* Merchant & Type Icon */}
-                    <td className="py-3.5 pl-2">
-                      <div className="flex items-center gap-3">
-                        <div className={`p-2 rounded-xl flex-shrink-0 ${
-                          isExpense ? 'bg-rose-500/10 text-rose-400' : 'bg-emerald-500/10 text-emerald-400'
-                        }`}>
-                          {isExpense ? (
-                            <ArrowDownLeft className="w-4 h-4" />
-                          ) : (
-                            <ArrowUpRight className="w-4 h-4" />
-                          )}
-                        </div>
-                        <div>
-                          <p className="font-semibold text-white tracking-tight">{tx.merchant}</p>
-                          {tx.notes && (
-                            <p className="text-[11px] text-slate-400 truncate max-w-xs">{tx.notes}</p>
-                          )}
-                        </div>
-                      </div>
-                    </td>
-
-                    {/* Bank & Card info */}
-                    <td className="py-3.5">
-                      <div className="flex flex-col">
-                        <span className={`inline-block px-2 py-0.5 rounded text-[11px] font-semibold border w-fit ${getBankBadgeStyle(tx.bank)}`}>
-                          {tx.bankName}
-                        </span>
-                        {tx.accountReference && (
-                          <span className="text-[11px] text-slate-400 mt-0.5 flex items-center gap-1">
-                            <CreditCard className="w-3 h-3" /> {tx.accountReference}
-                          </span>
-                        )}
-                      </div>
-                    </td>
-
-                    {/* Category */}
-                    <td className="py-3.5">
-                      {isEditing ? (
-                        <div className="flex items-center gap-1.5">
-                          <select
-                            value={tempCategory}
-                            onChange={(e) => setTempCategory(e.target.value as Category)}
-                            className="bg-slate-800 border border-emerald-500 text-white rounded px-2 py-1 text-xs focus:outline-none"
-                          >
-                            {CATEGORIES.map(c => (
-                              <option key={c} value={c}>{c}</option>
-                            ))}
-                          </select>
-                          <button 
-                            onClick={() => saveEdit(tx.id)}
-                            className="p-1 rounded bg-emerald-600 hover:bg-emerald-500 text-white"
-                          >
-                            <Check className="w-3 h-3" />
-                          </button>
-                          <button 
-                            onClick={() => setEditingId(null)}
-                            className="p-1 rounded bg-slate-700 hover:bg-slate-600 text-slate-300"
-                          >
-                            <X className="w-3 h-3" />
-                          </button>
-                        </div>
-                      ) : (
-                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-slate-800/80 text-slate-200 border border-slate-700">
-                          <Tag className="w-3 h-3 text-slate-400" />
-                          {tx.category}
-                        </span>
-                      )}
-                    </td>
-
-                    {/* Date */}
-                    <td className="py-3.5 text-xs text-slate-400">
+      {/* Quick 4-Grid Preview Cards (always shown or when table is not expanded) */}
+      {!showAllTable && (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          {previewList.length === 0 ? (
+            <div className="col-span-4 text-center py-8 text-on-surface-variant font-body-md">
+              No hay movimientos registrados en este período.
+            </div>
+          ) : (
+            previewList.map((tx) => {
+              const badge = getBankBadge(tx.bank);
+              const isIncome = tx.type === 'INCOME';
+              return (
+                <div
+                  key={tx.id}
+                  className="p-4 rounded-xl bg-surface-container-high/40 hover:bg-surface-container-high/70 transition-all flex flex-col justify-between gap-3 shadow-[0_4px_12px_rgba(0,0,0,0.2)] border border-outline-variant/15"
+                >
+                  <div className="flex items-center justify-between">
+                    <span className={`px-2.5 py-0.5 rounded-full font-label-sm text-[10px] font-semibold ${badge.className}`}>
+                      {badge.label}
+                    </span>
+                    <span className="font-label-sm text-[11px] text-on-surface-variant">
                       {formatDate(tx.date)}
-                    </td>
-
-                    {/* Amount */}
-                    <td className="py-3.5 text-right font-bold">
-                      <span className={isExpense ? 'text-rose-400' : 'text-emerald-400'}>
-                        {isExpense ? '-' : '+'} {formatDOP(tx.amount, tx.currency)}
-                      </span>
-                    </td>
-
-                    {/* Actions */}
-                    <td className="py-3.5 pr-2 text-right">
-                      <div className="flex items-center justify-end gap-1 opacity-80 group-hover:opacity-100 transition-opacity">
-                        {!isEditing && (
-                          <button
-                            onClick={() => startEdit(tx)}
-                            className="p-1.5 rounded-lg text-slate-400 hover:text-emerald-400 hover:bg-slate-800 transition-all"
-                            title="Cambiar categoría"
-                          >
-                            <Edit3 className="w-3.5 h-3.5" />
-                          </button>
-                        )}
-                        <button
-                          onClick={() => onDelete(tx.id)}
-                          className="p-1.5 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-slate-800 transition-all"
-                          title="Eliminar transacción"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    </td>
-
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+                    </span>
+                  </div>
+                  <div>
+                    <h3 className="font-body-md text-[14px] text-on-surface font-semibold truncate" title={tx.merchant}>
+                      {tx.merchant}
+                    </h3>
+                    <p className="font-label-sm text-[12px] text-on-surface-variant mt-0.5">
+                      {tx.category}
+                    </p>
+                  </div>
+                  <div className="flex items-center justify-between pt-1 border-t border-outline-variant/10">
+                    <span className="font-label-sm text-[11px] text-secondary font-medium flex items-center gap-1">
+                      <span className="material-symbols-outlined text-[14px]">check</span>
+                      {isIncome ? 'Aplicado' : 'Validado'}
+                    </span>
+                    <span className={`font-mono-metric text-[14px] font-bold ${
+                      isIncome ? 'text-secondary' : 'text-error'
+                    }`}>
+                      {isIncome ? '+' : '-'}{formatDOP(tx.amount, tx.currency)}
+                    </span>
+                  </div>
+                </div>
+              );
+            })
+          )}
         </div>
       )}
 
+      {/* Full Filterable Table (When expanded) */}
+      {showAllTable && (
+        <div className="mt-4">
+          {/* Filters Bar */}
+          <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 mb-4">
+            {/* Search */}
+            <div className="sm:col-span-6 relative">
+              <span className="material-symbols-outlined absolute left-3 top-2.5 text-on-surface-variant text-[18px]">
+                search
+              </span>
+              <input
+                type="text"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                placeholder="Buscar por comercio o concepto..."
+                className="w-full bg-surface-container-highest/50 border border-outline-variant/30 rounded-xl pl-9 pr-3 py-2 text-on-surface placeholder-on-surface-variant/60 font-body-sm text-[13px] outline-none focus:border-primary transition-colors"
+              />
+              {searchTerm && (
+                <button
+                  onClick={() => setSearchTerm('')}
+                  className="absolute right-3 top-2.5 text-on-surface-variant hover:text-on-surface"
+                >
+                  <span className="material-symbols-outlined text-[16px]">close</span>
+                </button>
+              )}
+            </div>
+
+            {/* Category Select */}
+            <div className="sm:col-span-3">
+              <select
+                value={selectedCategory}
+                onChange={(e) => setSelectedCategory(e.target.value)}
+                className="w-full bg-surface-container-highest/50 border border-outline-variant/30 rounded-xl px-3 py-2 text-on-surface font-body-sm text-[13px] outline-none focus:border-primary cursor-pointer"
+              >
+                <option value="ALL">Todas las Categorías</option>
+                {CATEGORIES.map((c) => (
+                  <option key={c} value={c}>
+                    {c}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Type Select */}
+            <div className="sm:col-span-3">
+              <select
+                value={selectedType}
+                onChange={(e) => setSelectedType(e.target.value)}
+                className="w-full bg-surface-container-highest/50 border border-outline-variant/30 rounded-xl px-3 py-2 text-on-surface font-body-sm text-[13px] outline-none focus:border-primary cursor-pointer"
+              >
+                <option value="ALL">Todos los Tipos</option>
+                <option value="EXPENSE">Gastos (Débitos)</option>
+                <option value="INCOME">Ingresos (Créditos)</option>
+              </select>
+            </div>
+          </div>
+
+          {/* Table Container */}
+          <div className="overflow-x-auto rounded-xl border border-outline-variant/20">
+            <table className="w-full text-left text-[13px]">
+              <thead className="bg-surface-container-highest/40 text-on-surface-variant text-[11px] uppercase tracking-wider">
+                <tr>
+                  <th className="py-3 px-4">Fecha</th>
+                  <th className="py-3 px-4">Banco</th>
+                  <th className="py-3 px-4">Comercio / Descripción</th>
+                  <th className="py-3 px-4">Categoría</th>
+                  <th className="py-3 px-4 text-right">Monto</th>
+                  <th className="py-3 px-4 text-center">Acciones</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-outline-variant/15">
+                {filtered.map((tx) => {
+                  const badge = getBankBadge(tx.bank);
+                  const isIncome = tx.type === 'INCOME';
+                  return (
+                    <tr key={tx.id} className="hover:bg-surface-container-high/30 transition-colors">
+                      <td className="py-3 px-4 font-mono-metric text-[12px] text-on-surface-variant whitespace-nowrap">
+                        {formatDate(tx.date)}
+                      </td>
+                      <td className="py-3 px-4 whitespace-nowrap">
+                        <span className={`px-2 py-0.5 rounded-full font-label-sm text-[10px] font-semibold ${badge.className}`}>
+                          {badge.label}
+                        </span>
+                      </td>
+                      <td className="py-3 px-4">
+                        <div className="font-semibold text-on-surface">{tx.merchant}</div>
+                        {tx.notes && (
+                          <div className="text-[11px] text-on-surface-variant">{tx.notes}</div>
+                        )}
+                      </td>
+                      <td className="py-3 px-4 whitespace-nowrap">
+                        {editingId === tx.id ? (
+                          <div className="flex items-center gap-1.5">
+                            <select
+                              value={tempCategory}
+                              onChange={(e) => setTempCategory(e.target.value as Category)}
+                              className="bg-surface-container-highest text-on-surface text-[12px] rounded-lg px-2 py-1 border border-outline-variant/40 outline-none"
+                            >
+                              {CATEGORIES.map((cat) => (
+                                <option key={cat} value={cat}>
+                                  {cat}
+                                </option>
+                              ))}
+                            </select>
+                            <button
+                              onClick={() => {
+                                onUpdateCategory(tx.id, tempCategory);
+                                setEditingId(null);
+                              }}
+                              className="p-1 rounded bg-secondary/20 text-secondary hover:bg-secondary/30"
+                              title="Guardar"
+                            >
+                              <span className="material-symbols-outlined text-[16px]">check</span>
+                            </button>
+                            <button
+                              onClick={() => setEditingId(null)}
+                              className="p-1 rounded bg-surface-container-high text-on-surface-variant hover:text-on-surface"
+                              title="Cancelar"
+                            >
+                              <span className="material-symbols-outlined text-[16px]">close</span>
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-1.5 group">
+                            <span className="text-on-surface-variant">{tx.category}</span>
+                            <button
+                              onClick={() => {
+                                setEditingId(tx.id);
+                                setTempCategory(tx.category);
+                              }}
+                              className="opacity-0 group-hover:opacity-100 text-primary hover:text-primary-fixed transition-opacity p-0.5"
+                              title="Cambiar categoría"
+                            >
+                              <span className="material-symbols-outlined text-[14px]">edit</span>
+                            </button>
+                          </div>
+                        )}
+                      </td>
+                      <td className="py-3 px-4 text-right whitespace-nowrap">
+                        <span className={`font-mono-metric font-bold ${
+                          isIncome ? 'text-secondary' : 'text-error'
+                        }`}>
+                          {isIncome ? '+' : '-'}{formatDOP(tx.amount, tx.currency)}
+                        </span>
+                      </td>
+                      <td className="py-3 px-4 text-center whitespace-nowrap">
+                        <button
+                          onClick={() => onDelete(tx.id)}
+                          className="p-1 rounded-lg text-on-surface-variant hover:text-error hover:bg-error-container/20 transition-colors"
+                          title="Eliminar movimiento"
+                        >
+                          <span className="material-symbols-outlined text-[18px]">delete</span>
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

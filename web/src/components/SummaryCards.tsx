@@ -1,128 +1,141 @@
 import React from 'react';
-import { Wallet, TrendingDown, TrendingUp, Receipt, ArrowUpRight, ArrowDownRight } from 'lucide-react';
 import { AnalyticsSummary } from '../types';
 
 interface SummaryCardsProps {
   summary: AnalyticsSummary | null;
-  loading: boolean;
+  loading?: boolean;
 }
 
-export const SummaryCards: React.FC<SummaryCardsProps> = ({ summary, loading }) => {
+export const SummaryCards: React.FC<SummaryCardsProps> = ({ summary, loading = false }) => {
   const formatDOP = (amount: number) => {
     return new Intl.NumberFormat('es-DO', {
       style: 'currency',
       currency: 'DOP',
-      minimumFractionDigits: 2
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
     }).format(amount);
   };
 
-  if (loading || !summary) {
+  const balance = summary ? summary.netBalance : 0;
+  const isPositive = balance >= 0;
+  const categoriesCount = summary?.categories ? summary.categories.length : 0;
+  const totalTransactions = summary ? summary.transactionsCount : 0;
+  const totalExpenses = summary ? summary.totalExpenses : 0;
+  const totalIncome = summary ? summary.totalIncome : 0;
+
+  if (loading) {
     return (
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 animate-pulse">
-        {[1, 2, 3, 4].map(i => (
-          <div key={i} className="h-32 rounded-2xl bg-slate-900/60 border border-slate-800/60" />
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+        {[1, 2, 3, 4].map((i) => (
+          <div
+            key={i}
+            className="rounded-2xl bg-surface-container-low/70 backdrop-blur-2xl p-6 border border-outline-variant/20 animate-pulse h-40 flex flex-col justify-between"
+          >
+            <div className="h-4 bg-surface-container-high/60 rounded w-1/2"></div>
+            <div className="h-8 bg-surface-container-high/60 rounded w-3/4"></div>
+            <div className="h-5 bg-surface-container-high/60 rounded-full w-2/3"></div>
+          </div>
         ))}
       </div>
     );
   }
 
-  const isNetPositive = summary.netBalance >= 0;
-
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-      
-      {/* Balance Neto */}
-      <div className="glass-card rounded-2xl p-5 relative overflow-hidden group hover:border-emerald-500/40 transition-all">
-        <div className="flex items-center justify-between">
-          <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">
-            Balance Neto
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+      {/* KPI 1: Balance Neto */}
+      <div className="relative overflow-hidden rounded-2xl bg-surface-container-low/70 backdrop-blur-2xl p-6 shadow-[0_16px_36px_-8px_rgba(0,0,0,0.5)] border border-outline-variant/20 group hover:bg-surface-container-low transition-all">
+        <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-secondary-fixed/50 to-transparent"></div>
+        <div className="flex items-center justify-between mb-4">
+          <span className="font-label-md text-[12px] text-on-surface-variant uppercase tracking-wider font-semibold">
+            Balance Neto RD$
           </span>
-          <div className={`p-2.5 rounded-xl ${isNetPositive ? 'bg-emerald-500/10 text-emerald-400' : 'bg-rose-500/10 text-rose-400'}`}>
-            <Wallet className="w-5 h-5" />
+          <div className="w-9 h-9 rounded-full bg-secondary/10 flex items-center justify-center text-secondary">
+            <span className="material-symbols-outlined text-[20px]">account_balance_wallet</span>
           </div>
         </div>
-        <div className="mt-3">
-          <h3 className={`text-2xl sm:text-3xl font-bold tracking-tight ${isNetPositive ? 'text-emerald-400' : 'text-rose-400'}`}>
-            {formatDOP(summary.netBalance)}
-          </h3>
-          <div className="flex items-center gap-1.5 mt-1.5 text-xs text-slate-400">
-            {isNetPositive ? (
-              <span className="flex items-center text-emerald-400 font-medium">
-                <ArrowUpRight className="w-3.5 h-3.5" /> Superávit
-              </span>
-            ) : (
-              <span className="flex items-center text-rose-400 font-medium">
-                <ArrowDownRight className="w-3.5 h-3.5" /> Déficit
-              </span>
-            )}
-            <span>• Ingresos - Gastos</span>
-          </div>
+        <div className="flex items-baseline gap-1 mb-3">
+          <span className={`font-headline-lg text-2xl sm:text-3xl font-bold tracking-tight truncate ${
+            isPositive ? 'text-secondary' : 'text-error'
+          }`}>
+            {formatDOP(balance)}
+          </span>
+        </div>
+        <div className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full font-label-sm text-[11px] font-semibold ${
+          isPositive ? 'bg-secondary/10 text-secondary' : 'bg-error-container/20 text-error'
+        }`}>
+          <span className="material-symbols-outlined text-[14px]">
+            {isPositive ? 'trending_up' : 'trending_down'}
+          </span>
+          <span>{isPositive ? 'Superávit • Ingresos - Gastos' : 'Déficit • Gastos > Ingresos'}</span>
         </div>
       </div>
 
-      {/* Total Gastos */}
-      <div className="glass-card rounded-2xl p-5 relative overflow-hidden group hover:border-rose-500/40 transition-all">
-        <div className="flex items-center justify-between">
-          <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">
-            Total Gastos
+      {/* KPI 2: Total Gastos */}
+      <div className="relative overflow-hidden rounded-2xl bg-surface-container-low/70 backdrop-blur-2xl p-6 shadow-[0_16px_36px_-8px_rgba(0,0,0,0.5)] border border-outline-variant/20 group hover:bg-surface-container-low transition-all">
+        <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-error/50 to-transparent"></div>
+        <div className="flex items-center justify-between mb-4">
+          <span className="font-label-md text-[12px] text-on-surface-variant uppercase tracking-wider font-semibold">
+            Total Gastos RD$
           </span>
-          <div className="p-2.5 rounded-xl bg-rose-500/10 text-rose-400">
-            <TrendingDown className="w-5 h-5" />
+          <div className="w-9 h-9 rounded-full bg-error-container/20 flex items-center justify-center text-error">
+            <span className="material-symbols-outlined text-[20px]">south_east</span>
           </div>
         </div>
-        <div className="mt-3">
-          <h3 className="text-2xl sm:text-3xl font-bold tracking-tight text-white">
-            {formatDOP(summary.totalExpenses)}
-          </h3>
-          <div className="flex items-center gap-1.5 mt-1.5 text-xs text-slate-400">
-            <span className="text-rose-400 font-medium">{summary.categories.length} categorías</span>
-            <span>analizadas</span>
-          </div>
+        <div className="flex items-baseline gap-1 mb-3">
+          <span className="font-headline-lg text-2xl sm:text-3xl text-error font-bold tracking-tight truncate">
+            {formatDOP(totalExpenses)}
+          </span>
+        </div>
+        <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-error-container/20 text-error font-label-sm text-[11px] font-semibold">
+          <span className="material-symbols-outlined text-[14px]">category</span>
+          <span>{categoriesCount} categorías analizadas</span>
         </div>
       </div>
 
-      {/* Total Ingresos */}
-      <div className="glass-card rounded-2xl p-5 relative overflow-hidden group hover:border-emerald-500/40 transition-all">
-        <div className="flex items-center justify-between">
-          <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">
-            Total Ingresos
+      {/* KPI 3: Total Ingresos */}
+      <div className="relative overflow-hidden rounded-2xl bg-surface-container-low/70 backdrop-blur-2xl p-6 shadow-[0_16px_36px_-8px_rgba(0,0,0,0.5)] border border-outline-variant/20 group hover:bg-surface-container-low transition-all">
+        <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-primary-container/60 to-transparent"></div>
+        <div className="flex items-center justify-between mb-4">
+          <span className="font-label-md text-[12px] text-on-surface-variant uppercase tracking-wider font-semibold">
+            Total Ingresos RD$
           </span>
-          <div className="p-2.5 rounded-xl bg-emerald-500/10 text-emerald-400">
-            <TrendingUp className="w-5 h-5" />
+          <div className="w-9 h-9 rounded-full bg-primary-container/20 flex items-center justify-center text-primary-fixed">
+            <span className="material-symbols-outlined text-[20px]">north_east</span>
           </div>
         </div>
-        <div className="mt-3">
-          <h3 className="text-2xl sm:text-3xl font-bold tracking-tight text-white">
-            {formatDOP(summary.totalIncome)}
-          </h3>
-          <div className="flex items-center gap-1.5 mt-1.5 text-xs text-slate-400">
-            <span className="text-emerald-400 font-medium">Nómina y abonos</span>
-            <span>detectados</span>
-          </div>
+        <div className="flex items-baseline gap-1 mb-3">
+          <span className="font-headline-lg text-2xl sm:text-3xl text-primary font-bold tracking-tight truncate">
+            {formatDOP(totalIncome)}
+          </span>
+        </div>
+        <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-primary-container/15 text-primary font-label-sm text-[11px] font-semibold">
+          <span className="material-symbols-outlined text-[14px]">payments</span>
+          <span>Nómina y abonos detectados</span>
         </div>
       </div>
 
-      {/* Transacciones */}
-      <div className="glass-card rounded-2xl p-5 relative overflow-hidden group hover:border-indigo-500/40 transition-all">
-        <div className="flex items-center justify-between">
-          <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">
-            Transacciones
+      {/* KPI 4: Operaciones Registradas */}
+      <div className="relative overflow-hidden rounded-2xl bg-surface-container-low/70 backdrop-blur-2xl p-6 shadow-[0_16px_36px_-8px_rgba(0,0,0,0.5)] border border-outline-variant/20 group hover:bg-surface-container-low transition-all">
+        <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-tertiary-container/50 to-transparent"></div>
+        <div className="flex items-center justify-between mb-4">
+          <span className="font-label-md text-[12px] text-on-surface-variant uppercase tracking-wider font-semibold">
+            Operaciones Registradas
           </span>
-          <div className="p-2.5 rounded-xl bg-indigo-500/10 text-indigo-400">
-            <Receipt className="w-5 h-5" />
+          <div className="w-9 h-9 rounded-full bg-tertiary-container/20 flex items-center justify-center text-tertiary">
+            <span className="material-symbols-outlined text-[20px]">receipt_long</span>
           </div>
         </div>
-        <div className="mt-3">
-          <h3 className="text-2xl sm:text-3xl font-bold tracking-tight text-white">
-            {summary.transactionsCount}
-          </h3>
-          <div className="flex items-center gap-1.5 mt-1.5 text-xs text-slate-400">
-            <span className="text-indigo-400 font-medium">4 bancos</span>
-            <span>sincronizados</span>
-          </div>
+        <div className="flex items-baseline gap-2 mb-3">
+          <span className="font-headline-lg text-2xl sm:text-3xl text-on-surface font-bold tracking-tight">
+            {totalTransactions}
+          </span>
+          <span className="font-label-md text-[13px] text-on-surface-variant">movimientos</span>
+        </div>
+        <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-surface-container-high text-on-surface-variant font-label-sm text-[11px] font-semibold">
+          <span className="material-symbols-outlined text-[14px] text-secondary">verified</span>
+          <span>4 bancos sincronizados</span>
         </div>
       </div>
-
     </div>
   );
 };
