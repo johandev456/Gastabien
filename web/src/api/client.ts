@@ -2,9 +2,17 @@ import { AnalyticsSummary, Transaction, BankCode, Category, ReconciliationReport
 
 const getApiBase = (): string => {
   const envUrl = (import.meta.env.VITE_API_URL || '').trim();
-  if (!envUrl) return '/api';
-  const cleanUrl = envUrl.replace(/\/+$/, '');
-  return cleanUrl.endsWith('/api') ? cleanUrl : `${cleanUrl}/api`;
+  if (envUrl) {
+    const cleanUrl = envUrl.replace(/\/+$/, '');
+    return cleanUrl.endsWith('/api') ? cleanUrl : `${cleanUrl}/api`;
+  }
+  
+  // Auto-connect to live Render backend if hosted on Vercel or any remote domain
+  if (typeof window !== 'undefined' && !['localhost', '127.0.0.1'].includes(window.location.hostname)) {
+    return 'https://gastabien.onrender.com/api';
+  }
+  
+  return '/api';
 };
 
 const API_BASE = getApiBase();
