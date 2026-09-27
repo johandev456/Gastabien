@@ -23,6 +23,20 @@ router.get('/google/url', (req, res) => {
         return res.status(500).json({ error: err.message });
     }
 });
+// Save / Update Google OAuth credentials dynamically
+router.post('/google/config', (req, res) => {
+    const { clientId, clientSecret } = req.body;
+    if (!clientId || !clientSecret) {
+        return res.status(400).json({ error: 'Client ID y Client Secret son requeridos' });
+    }
+    config_1.CONFIG.GOOGLE.CLIENT_ID = clientId.trim();
+    config_1.CONFIG.GOOGLE.CLIENT_SECRET = clientSecret.trim();
+    return res.json({
+        success: true,
+        message: 'Credenciales de Google OAuth guardadas exitosamente.',
+        configured: true
+    });
+});
 // Google OAuth callback
 router.get('/google/callback', async (req, res) => {
     const code = req.query.code;

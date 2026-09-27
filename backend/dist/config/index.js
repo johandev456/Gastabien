@@ -9,12 +9,12 @@ dotenv_1.default.config();
 exports.CONFIG = {
     PORT: parseInt(process.env.PORT || '4000', 10),
     NODE_ENV: process.env.NODE_ENV || 'development',
-    FRONTEND_URL: process.env.FRONTEND_URL || 'http://localhost:5173',
+    FRONTEND_URL: process.env.FRONTEND_URL || (process.env.NODE_ENV === 'production' ? 'https://gastabien.vercel.app' : 'http://localhost:5173'),
     JWT_SECRET: process.env.JWT_SECRET || 'gastabien-super-secret-key-dr-2026',
     GOOGLE: {
         CLIENT_ID: process.env.GOOGLE_CLIENT_ID || '',
         CLIENT_SECRET: process.env.GOOGLE_CLIENT_SECRET || '',
-        REDIRECT_URI: process.env.GOOGLE_REDIRECT_URI || 'http://localhost:4000/api/auth/google/callback',
+        REDIRECT_URI: process.env.GOOGLE_REDIRECT_URI || (process.env.NODE_ENV === 'production' ? 'https://gastabien.onrender.com/api/auth/google/callback' : 'http://localhost:4000/api/auth/google/callback'),
     }
 };
 exports.SUPPORTED_BANKS = {

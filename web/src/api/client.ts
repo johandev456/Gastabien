@@ -135,4 +135,11 @@ export class ApiClient {
   public static async getGoogleAuthUrl(): Promise<{ configured: boolean; url: string | null }> {
     return this.request<{ configured: boolean; url: string | null }>('/auth/google/url');
   }
+
+  public static async saveGoogleConfig(data: { clientId: string; clientSecret: string }): Promise<{ success: boolean; message: string; configured: boolean }> {
+    return this.request<{ success: boolean; message: string; configured: boolean }>('/auth/google/config', {
+      method: 'POST',
+      body: JSON.stringify(data)
+    });
+  }
 }

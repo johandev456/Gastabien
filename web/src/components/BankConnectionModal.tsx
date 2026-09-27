@@ -1,15 +1,16 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   X, 
   Mail, 
   CheckCircle2, 
   ExternalLink, 
-  Sparkles,
-  Building2,
-  Info,
-  FileText,
-  KeyRound,
-  Send
+  Building2, 
+  FileText, 
+  KeyRound, 
+  Send,
+  AlertCircle,
+  Save,
+  Check
 } from 'lucide-react';
 import { ApiClient } from '../api/client';
 
@@ -28,13 +29,33 @@ export const BankConnectionModal: React.FC<BankConnectionModalProps> = ({
 }) => {
   const [activeTab, setActiveTab] = useState<'gmail' | 'paste' | 'banks'>('gmail');
   const [connecting, setConnecting] = useState(false);
+  const [showManualConfig, setShowManualConfig] = useState(false);
   
+  // Custom Google OAuth credentials form
+  const [clientId, setClientId] = useState('');
+  const [clientSecret, setClientSecret] = useState('');
+  const [savingConfig, setSavingConfig] = useState(false);
+  const [configMessage, setConfigMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
   // Paste form state
   const [rawText, setRawText] = useState('');
   const [rawSender, setRawSender] = useState('notificaciones@bpd.com.do');
   const [rawSubject, setRawSubject] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
   const [parseResult, setParseResult] = useState<{ success: boolean; message: string } | null>(null);
+
+  useEffect(() => {
+    if (isOpen) {
+      // Check if configured
+      ApiClient.getGoogleAuthUrl().then(res => {
+        if (!res.configured) {
+          setShowManualConfig(true);
+        }
+      }).catch(() => {
+        setShowManualConfig(true);
+      });
+    }
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
@@ -45,14 +66,47 @@ export const BankConnectionModal: React.FC<BankConnectionModalProps> = ({
       if (res.url) {
         window.location.href = res.url;
       } else {
-        alert(
-          'Para conectar Gmail en vivo se requieren las credenciales gratuitas de Google Cloud en el archivo backend/.env (GOOGLE_CLIENT_ID y GOOGLE_CLIENT_SECRET).\n\nMientras tanto, puedes usar la pestaña "Pegar Correo Bancario" o "Cargar Correos de Prueba".'
-        );
+        setShowManualConfig(true);
       }
     } catch {
-      alert('Configura las credenciales de Google OAuth en backend/.env');
+      setShowManualConfig(true);
     } finally {
       setConnecting(false);
+    }
+  };
+
+  const handleSaveConfig = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!clientId.trim() || !clientSecret.trim()) return;
+
+    try {
+      setSavingConfig(true);
+      setConfigMessage(null);
+      const res = await ApiClient.saveGoogleConfig({
+        clientId: clientId.trim(),
+        clientSecret: clientSecret.trim()
+      });
+
+      if (res.success) {
+        setConfigMessage({
+          type: 'success',
+          text: '¡Credenciales guardadas! Redirigiendo a Google...'
+        });
+        // Now trigger auth
+        const authRes = await ApiClient.getGoogleAuthUrl();
+        if (authRes.url) {
+          setTimeout(() => {
+            window.location.href = authRes.url!;
+          }, 1000);
+        }
+      }
+    } catch (err: any) {
+      setConfigMessage({
+        type: 'error',
+        text: err.message || 'Error al guardar credenciales en el servidor.'
+      });
+    } finally {
+      setSavingConfig(false);
     }
   };
 
@@ -217,18 +271,88 @@ export const BankConnectionModal: React.FC<BankConnectionModalProps> = ({
               </button>
             </div>
 
+            {/* In-app Credentials Configuration Box */}
+            {showManualConfig && (
+              <form onSubmit={handleSaveConfig} className="p-4 rounded-2xl bg-slate-950 border border-indigo-900/50 space-y-3 animate-fade-in">
+                <div className="flex items-center gap-2">
+                  <KeyRound className="w-4 h-4 text-indigo-400" />
+                  <h5 className="text-xs font-bold uppercase tracking-wider text-indigo-300">
+                    Configurar Credenciales de Google Cloud OAuth
+                  </h5>
+                </div>
+                <p className="text-xs text-slate-400 leading-relaxed">
+                  Para autorizar Gmail, ingresa las credenciales de tu proyecto de Google Cloud (o configúralas como variables de entorno en Render):
+                </p>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[11px] font-semibold text-slate-300 uppercase mb-1">
+                      Google Client ID
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="ej: 123456...apps.googleusercontent.com"
+                      value={clientId}
+                      onChange={(e) => setClientId(e.target.value)}
+                      className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-200 placeholder-slate-600 focus:outline-none focus:border-indigo-500 font-mono"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-semibold text-slate-300 uppercase mb-1">
+                      Google Client Secret
+                    </label>
+                    <input
+                      type="password"
+                      required
+                      placeholder="GOCSPX-..."
+                      value={clientSecret}
+                      onChange={(e) => setClientSecret(e.target.value)}
+                      className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-200 placeholder-slate-600 focus:outline-none focus:border-indigo-500 font-mono"
+                    />
+                  </div>
+                </div>
+
+                {configMessage && (
+                  <div className={`p-2.5 rounded-xl border text-xs flex items-center gap-2 ${
+                    configMessage.type === 'success' 
+                      ? 'bg-emerald-950/70 text-emerald-300 border-emerald-800' 
+                      : 'bg-rose-950/70 text-rose-300 border-rose-800'
+                  }`}>
+                    {configMessage.type === 'success' ? <Check className="w-3.5 h-3.5" /> : <AlertCircle className="w-3.5 h-3.5" />}
+                    <span>{configMessage.text}</span>
+                  </div>
+                )}
+
+                <div className="flex items-center justify-between pt-1">
+                  <span className="text-[11px] text-slate-400">
+                    URI de redirección: <code className="bg-slate-900 px-1 py-0.5 rounded text-indigo-300">https://gastabien.onrender.com/api/auth/google/callback</code>
+                  </span>
+                  <button
+                    type="submit"
+                    disabled={savingConfig || !clientId.trim() || !clientSecret.trim()}
+                    className="px-4 py-2 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-500 text-white shadow flex items-center gap-1.5 transition-all disabled:opacity-50"
+                  >
+                    <Save className="w-3.5 h-3.5" />
+                    <span>{savingConfig ? 'Guardando...' : 'Guardar y Autorizar'}</span>
+                  </button>
+                </div>
+              </form>
+            )}
+
             {/* Step-by-step Setup Guide */}
             <div className="p-4 rounded-2xl bg-slate-950/70 border border-slate-800 space-y-2.5 text-xs text-slate-300">
               <h5 className="font-bold text-white flex items-center gap-1.5 text-xs uppercase tracking-wider">
                 <KeyRound className="w-4 h-4 text-emerald-400" />
-                ¿Cómo activar la lectura real de tu correo?
+                Pasos para crear tu Client ID gratuito en Google Cloud:
               </h5>
               <ol className="list-decimal list-inside space-y-1.5 text-slate-300 pl-1 leading-relaxed">
                 <li>Ve a <a href="https://console.cloud.google.com/" target="_blank" rel="noreferrer" className="text-emerald-400 underline font-semibold">Google Cloud Console</a> y crea un proyecto gratuito.</li>
                 <li>En <strong>APIs & Services</strong>, habilita la <strong>Gmail API</strong>.</li>
                 <li>En <strong>OAuth Consent Screen</strong>, añade tu correo como usuario de prueba.</li>
-                <li>En <strong>Credentials</strong>, crea un <em>OAuth Client ID (Web Application)</em> con URI de redirección: <code className="bg-slate-900 px-1 py-0.5 rounded text-emerald-300">http://localhost:4000/api/auth/google/callback</code>.</li>
-                <li>Copia tu <code className="text-amber-300">GOOGLE_CLIENT_ID</code> y <code className="text-amber-300">GOOGLE_CLIENT_SECRET</code> en el archivo <code className="text-white">backend/.env</code>.</li>
+                <li>En <strong>Credentials</strong>, crea un <em>OAuth Client ID (Web Application)</em> con URI de redirección: <code className="bg-slate-900 px-1 py-0.5 rounded text-emerald-300">https://gastabien.onrender.com/api/auth/google/callback</code>.</li>
+                <li>Pega tu <code className="text-amber-300">Client ID</code> y <code className="text-amber-300">Client Secret</code> en el formulario de arriba.</li>
               </ol>
             </div>
           </div>
@@ -273,24 +397,13 @@ export const BankConnectionModal: React.FC<BankConnectionModalProps> = ({
             </div>
 
             <div>
-              <div className="flex items-center justify-between mb-1">
-                <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider">
-                  Cuerpo / Texto del Correo Bancario
-                </label>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setRawText('Estimado cliente, se ha realizado un débito por compra con su Tarjeta terminada en 4829 por un monto de RD$ 3,120.00 en ESTACION TOTAL CHURCHILL.');
-                  }}
-                  className="text-[11px] text-indigo-400 hover:underline"
-                >
-                  Insertar ejemplo
-                </button>
-              </div>
+              <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1">
+                Cuerpo / Texto del Correo Bancario
+              </label>
               <textarea
                 required
                 rows={4}
-                placeholder="Pega aquí el texto del correo bancario (ej: 'Consumo aprobado por RD$ 1,850.00 en SUPERMERCADO BRAVO...')"
+                placeholder="Pega aquí el texto del correo bancario recibido de tu banco..."
                 value={rawText}
                 onChange={(e) => setRawText(e.target.value)}
                 className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-xs text-slate-200 placeholder-slate-600 focus:outline-none focus:border-indigo-500 font-mono"
@@ -338,7 +451,7 @@ export const BankConnectionModal: React.FC<BankConnectionModalProps> = ({
                   <span className="text-[11px] font-mono text-emerald-400">{b.email}</span>
                 </div>
                 <div className="p-2 rounded-lg bg-slate-900 border border-slate-800/80 text-[11px] font-mono text-slate-400">
-                  <span className="text-slate-500 block mb-0.5">Formato de ejemplo:</span>
+                  <span className="text-slate-500 block mb-0.5">Formato compatible:</span>
                   {b.sample}
                 </div>
               </div>
