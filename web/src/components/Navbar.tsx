@@ -17,16 +17,23 @@ export const Navbar: React.FC<NavbarProps> = ({
   onOpenStatementModal
 }) => {
   return (
-    <header className="sticky top-0 right-0 h-20 bg-surface/70 backdrop-blur-2xl z-30 border-b border-outline-variant/20 shadow-[0_1px_8px_rgba(0,0,0,0.06)]">
-      <div className="h-20 w-full px-4 sm:px-6 lg:px-8 flex items-center justify-between gap-4">
-        {/* Left Side: Live Feed & Mobile Brand */}
-        <div className="flex items-center gap-3">
-          {/* Mobile Only Brand Icon */}
-          <div className="flex xl:hidden items-center gap-2">
-            <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-primary-container via-primary to-secondary flex items-center justify-center shadow-md shrink-0">
-              <span className="material-symbols-outlined text-on-primary-container text-[20px]">account_balance_wallet</span>
+    <header className="sticky top-0 right-0 h-20 bg-surface/70 backdrop-blur-2xl z-30 border-b border-outline-variant/20 shadow-[0_1px_8px_rgba(0,0,0,0.06)] left-0">
+      <div className="h-20 w-full max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between gap-4">
+        {/* Left Side: Brand Logo & Live Feed */}
+        <div className="flex items-center gap-3 sm:gap-4">
+          {/* Brand Logo */}
+          <div className="flex items-center gap-2.5 sm:gap-3 mr-1 sm:mr-3">
+            <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-primary-container via-primary to-secondary flex items-center justify-center shadow-[0_4px_16px_rgba(62,144,255,0.35)] shrink-0">
+              <span className="material-symbols-outlined text-on-primary-container text-[22px]">account_balance_wallet</span>
             </div>
-            <span className="font-headline-sm text-sm text-on-surface font-bold">GastaBien RD</span>
+            <div className="flex flex-col">
+              <span className="font-headline-sm text-sm sm:text-base text-on-surface tracking-tight leading-none font-bold">
+                GastaBien <span className="text-primary text-[11px] font-semibold px-2 py-0.5 rounded-full bg-surface-container-high ml-0.5">RD</span>
+              </span>
+              <span className="font-label-sm text-[10px] text-on-surface-variant tracking-wider uppercase mt-1 hidden sm:inline">
+                Finanzas Personales
+              </span>
+            </div>
           </div>
 
           {/* Live Feed Pill */}
@@ -36,8 +43,8 @@ export const Navbar: React.FC<NavbarProps> = ({
               <span className="relative inline-flex rounded-full h-2 w-2 bg-secondary"></span>
             </span>
             <span className="font-label-sm text-[11px] text-on-surface font-semibold tracking-wider">FEED EN VIVO</span>
-            <div className="h-3 w-px bg-outline-variant/60 hidden sm:block"></div>
-            <div className="hidden sm:flex items-center gap-1.5 text-[11px] text-on-surface-variant font-medium">
+            <div className="h-3 w-px bg-outline-variant/60 hidden md:block"></div>
+            <div className="hidden md:flex items-center gap-1.5 text-[11px] text-on-surface-variant font-medium">
               <span>Promerica</span>
               <span>•</span>
               <span>Popular</span>
@@ -59,7 +66,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             title="Cargar extracto o estado de cuenta bancario"
           >
             <span className="material-symbols-outlined text-[16px]">description</span>
-            <span className="hidden md:inline">Estado de Cuenta</span>
+            <span className="hidden lg:inline">Estado de Cuenta</span>
           </button>
 
           {/* Sincronizar */}
@@ -77,7 +84,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               <span className="relative inline-flex rounded-full h-2 w-2 bg-primary-container"></span>
             </span>
             <span className="material-symbols-outlined text-[16px]">sync</span>
-            <span className="hidden md:inline">{isSyncing ? 'Escaneando...' : 'Sincronizar'}</span>
+            <span className="hidden lg:inline">{isSyncing ? 'Escaneando...' : 'Sincronizar'}</span>
           </button>
 
           {/* + Ingreso */}
