@@ -15,6 +15,7 @@ export function App() {
   const [summary, setSummary] = useState<AnalyticsSummary | null>(null);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [selectedBanks, setSelectedBanks] = useState<string[]>([]);
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [isSyncing, setIsSyncing] = useState(false);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -282,16 +283,24 @@ export function App() {
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
           {/* Left Column (7 cols): Gastos por Categoría */}
           <div className="lg:col-span-7">
-            <CategoryPieChart categories={summary?.categories || []} />
+            <CategoryPieChart
+              categories={summary?.categories || []}
+              selectedCategory={selectedCategory}
+              onSelectCategory={setSelectedCategory}
+            />
           </div>
 
-          {/* Right Column (5 cols): Flujo de Efectivo */}
+          {/* Right Column (5 cols): Flujo de Efectivo & Top Transacciones de Categoría */}
           <div className="lg:col-span-5">
             <MonthlyTrendChart
               data={summary?.monthlyTrend || []}
               totalIncome={summary?.totalIncome || 0}
               totalExpenses={summary?.totalExpenses || 0}
               netBalance={summary?.netBalance || 0}
+              selectedCategory={selectedCategory}
+              onSelectCategory={setSelectedCategory}
+              categories={summary?.categories || []}
+              transactions={transactions}
             />
           </div>
         </div>
@@ -299,6 +308,8 @@ export function App() {
         {/* Transactions Feed & Log */}
         <TransactionList
           transactions={transactions}
+          selectedCategory={selectedCategory}
+          onSelectCategory={setSelectedCategory}
           onUpdateCategory={handleUpdateCategory}
           onDelete={handleDeleteTransaction}
           onClearAll={handleClearAllTransactions}

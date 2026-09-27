@@ -3,9 +3,15 @@ import { CategorySummary } from '../types';
 
 interface CategoryPieChartProps {
   categories: CategorySummary[];
+  selectedCategory?: string | null;
+  onSelectCategory?: (category: string | null) => void;
 }
 
-export const CategoryPieChart: React.FC<CategoryPieChartProps> = ({ categories }) => {
+export const CategoryPieChart: React.FC<CategoryPieChartProps> = ({
+  categories,
+  selectedCategory = null,
+  onSelectCategory
+}) => {
   const formatDOP = (amount: number) => {
     return new Intl.NumberFormat('es-DO', {
       style: 'currency',
@@ -120,19 +126,23 @@ export const CategoryPieChart: React.FC<CategoryPieChartProps> = ({ categories }
     const strokeDashoffset = -currentOffset;
     currentOffset += strokeDash;
     const theme = getCategoryTheme(cat.category, idx);
+    const isSelected = selectedCategory === cat.category;
 
     return {
       category: cat.category,
       percentage: cat.percentage,
+      total: cat.total,
       strokeDasharray,
       strokeDashoffset,
-      colorHex: theme.colorHex
+      colorHex: theme.colorHex,
+      isSelected
     };
   });
 
   const maxExpense = categories.length > 0 ? categories[0] : null;
   const maxFreq = [...categories].sort((a, b) => b.count - a.count)[0];
   const cashWithdrawal = categories.find(c => c.category.toLowerCase().includes('retiro') || c.category.toLowerCase().includes('efectivo'));
+  const activeCategorySummary = categories.find(c => c.category === selectedCategory);
 
   return (
     <div className="relative overflow-hidden rounded-2xl bg-surface-container-low/70 backdrop-blur-2xl p-6 shadow-[0_20px_44px_-10px_rgba(0,0,0,0.6)] border border-outline-variant/20 flex flex-col justify-between h-full">
@@ -141,14 +151,26 @@ export const CategoryPieChart: React.FC<CategoryPieChartProps> = ({ categories }
         {/* Header */}
         <div className="flex items-center justify-between mb-4">
           <div>
-            <h2 className="font-headline-md text-xl sm:text-2xl text-on-surface font-bold">
-              Gastos por Categoría
-            </h2>
+            <div className="flex items-center gap-2">
+              <h2 className="font-headline-md text-xl sm:text-2xl text-on-surface font-bold">
+                Gastos por Categoría
+              </h2>
+              {selectedCategory && (
+                <button
+                  onClick={() => onSelectCategory?.(null)}
+                  type="button"
+                  className="px-2.5 py-0.5 rounded-full bg-primary/20 text-primary text-[11px] font-bold flex items-center gap-1 hover:bg-primary/30 transition-all cursor-pointer border border-primary/30"
+                >
+                  <span>Filtrado: {selectedCategory}</span>
+                  <span className="material-symbols-outlined text-[13px]">close</span>
+                </button>
+              )}
+            </div>
             <p className="font-body-sm text-[13px] text-on-surface-variant">
-              Distribución automática por comercios dominicanos
+              Toca cualquier categoría para filtrar transacciones y comparar en la barra
             </p>
           </div>
-          <span className="font-mono-metric text-[13px] px-3.5 py-1.5 rounded-full bg-surface-container-high text-primary font-semibold border border-outline-variant/20">
+          <span className="font-mono-metric text-[13px] px-3.5 py-1.5 rounded-full bg-surface-container-high text-primary font-semibold border border-outline-variant/20 shrink-0">
             Septiembre 2026
           </span>
         </div>
@@ -181,8 +203,15 @@ export const CategoryPieChart: React.FC<CategoryPieChartProps> = ({ categories }
                     strokeDasharray={seg.strokeDasharray}
                     strokeDashoffset={seg.strokeDashoffset}
                     strokeLinecap="butt"
-                    strokeWidth="14"
-                    className="transition-all duration-700 hover:opacity-90"
+                    strokeWidth={seg.isSelected ? 18 : 14}
+                    className={`transition-all duration-300 cursor-pointer ${
+                      selectedCategory
+                        ? seg.isSelected
+                          ? 'opacity-100 filter drop-shadow-[0_0_8px_rgba(255,255,255,0.4)]'
+                          : 'opacity-30 hover:opacity-75'
+                        : 'hover:opacity-90 hover:stroke-[16px]'
+                    }`}
+                    onClick={() => onSelectCategory?.(selectedCategory === seg.category ? null : seg.category)}
                   />
                 ))
               ) : (
@@ -198,26 +227,56 @@ export const CategoryPieChart: React.FC<CategoryPieChartProps> = ({ categories }
             </svg>
 
             {/* Inner Center Label */}
-            <div className="absolute inset-0 flex flex-col items-center justify-center text-center pointer-events-none">
-              <span className="font-label-sm text-[10px] uppercase tracking-wider text-on-surface-variant font-semibold">
-                TOTAL GASTOS
-              </span>
-              <span className="font-headline-sm text-lg text-on-surface font-bold">
-                {categories.length > 0 ? '100%' : '0%'}
-              </span>
-              <span className="font-label-sm text-[10px] text-secondary font-semibold">
-                {categories.length > 0 ? 'SYNCED' : 'SIN DATOS'}
-              </span>
+            <div className="absolute inset-0 flex flex-col items-center justify-center text-center px-4">
+              {activeCategorySummary ? (
+                <>
+                  <span className="font-label-sm text-[10px] uppercase tracking-wider text-primary font-bold line-clamp-1">
+                    {activeCategorySummary.category}
+                  </span>
+                  <span className="font-headline-sm text-base sm:text-lg text-on-surface font-extrabold">
+                    {formatDOP(activeCategorySummary.total)}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => onSelectCategory?.(null)}
+                    className="font-label-sm text-[10px] text-primary hover:underline font-semibold mt-0.5 cursor-pointer"
+                  >
+                    ✕ Ver Todas
+                  </button>
+                </>
+              ) : (
+                <>
+                  <span className="font-label-sm text-[10px] uppercase tracking-wider text-on-surface-variant font-semibold">
+                    TOTAL GASTOS
+                  </span>
+                  <span className="font-headline-sm text-lg text-on-surface font-bold">
+                    {categories.length > 0 ? '100%' : '0%'}
+                  </span>
+                  <span className="font-label-sm text-[10px] text-secondary font-semibold">
+                    {categories.length > 0 ? 'INTERACTIVO' : 'SIN DATOS'}
+                  </span>
+                </>
+              )}
             </div>
           </div>
 
           {/* Quick Peek Highlights */}
           <div className="sm:col-span-7 flex flex-col gap-2">
             {maxExpense ? (
-              <div className="p-3 rounded-xl bg-surface-container-high/40 border border-outline-variant/15 flex items-center justify-between">
+              <div 
+                onClick={() => onSelectCategory?.(selectedCategory === maxExpense.category ? null : maxExpense.category)}
+                className={`p-3 rounded-xl border transition-all cursor-pointer ${
+                  selectedCategory === maxExpense.category
+                    ? 'bg-surface-container-high border-error shadow-[0_0_14px_rgba(255,180,171,0.2)]'
+                    : 'bg-surface-container-high/40 border-outline-variant/15 hover:bg-surface-container-high/70'
+                } flex items-center justify-between`}
+              >
                 <div className="flex items-center gap-2">
                   <div className="w-2.5 h-2.5 rounded-full bg-error"></div>
-                  <span className="font-body-sm text-[13px] text-on-surface font-medium">Mayor desembolso</span>
+                  <div>
+                    <span className="font-body-sm text-[13px] text-on-surface font-medium">Mayor desembolso</span>
+                    <span className="font-label-sm text-[11px] text-on-surface-variant ml-1.5">({maxExpense.category})</span>
+                  </div>
                 </div>
                 <span className="font-mono-metric text-[14px] text-error font-semibold">
                   {formatDOP(maxExpense.total)}
@@ -225,10 +284,20 @@ export const CategoryPieChart: React.FC<CategoryPieChartProps> = ({ categories }
               </div>
             ) : null}
             {maxFreq ? (
-              <div className="p-3 rounded-xl bg-surface-container-high/40 border border-outline-variant/15 flex items-center justify-between">
+              <div 
+                onClick={() => onSelectCategory?.(selectedCategory === maxFreq.category ? null : maxFreq.category)}
+                className={`p-3 rounded-xl border transition-all cursor-pointer ${
+                  selectedCategory === maxFreq.category
+                    ? 'bg-surface-container-high border-secondary shadow-[0_0_14px_rgba(71,226,102,0.2)]'
+                    : 'bg-surface-container-high/40 border-outline-variant/15 hover:bg-surface-container-high/70'
+                } flex items-center justify-between`}
+              >
                 <div className="flex items-center gap-2">
                   <div className="w-2.5 h-2.5 rounded-full bg-secondary-fixed"></div>
-                  <span className="font-body-sm text-[13px] text-on-surface font-medium">Frecuencia más alta</span>
+                  <div>
+                    <span className="font-body-sm text-[13px] text-on-surface font-medium">Frecuencia más alta</span>
+                    <span className="font-label-sm text-[11px] text-on-surface-variant ml-1.5">({maxFreq.category})</span>
+                  </div>
                 </div>
                 <span className="font-mono-metric text-[14px] text-on-surface font-semibold">
                   {maxFreq.count} Compras
@@ -236,7 +305,14 @@ export const CategoryPieChart: React.FC<CategoryPieChartProps> = ({ categories }
               </div>
             ) : null}
             {cashWithdrawal ? (
-              <div className="p-3 rounded-xl bg-surface-container-high/40 border border-outline-variant/15 flex items-center justify-between">
+              <div 
+                onClick={() => onSelectCategory?.(selectedCategory === cashWithdrawal.category ? null : cashWithdrawal.category)}
+                className={`p-3 rounded-xl border transition-all cursor-pointer ${
+                  selectedCategory === cashWithdrawal.category
+                    ? 'bg-surface-container-high border-primary-container shadow-[0_0_14px_rgba(62,144,255,0.2)]'
+                    : 'bg-surface-container-high/40 border-outline-variant/15 hover:bg-surface-container-high/70'
+                } flex items-center justify-between`}
+              >
                 <div className="flex items-center gap-2">
                   <div className="w-2.5 h-2.5 rounded-full bg-primary-container"></div>
                   <span className="font-body-sm text-[13px] text-on-surface font-medium">Efectivo en Cajeros RD</span>
@@ -249,28 +325,45 @@ export const CategoryPieChart: React.FC<CategoryPieChartProps> = ({ categories }
           </div>
         </div>
 
-        {/* Detailed Progress Pills */}
-        <div className="flex flex-col gap-3.5 mt-4">
+        {/* Detailed Progress Interactive Pills */}
+        <div className="flex flex-col gap-2.5 mt-4">
           {categories.length === 0 ? (
             <div className="text-center py-6 text-on-surface-variant font-body-md text-sm">
               No hay gastos registrados en este período.
             </div>
           ) : (
-            categories.slice(0, 5).map((cat, idx) => {
+            categories.map((cat, idx) => {
               const theme = getCategoryTheme(cat.category, idx);
+              const isSelected = selectedCategory === cat.category;
+
               return (
-                <div key={cat.category} className="flex flex-col gap-1.5">
+                <div
+                  key={cat.category}
+                  onClick={() => onSelectCategory?.(isSelected ? null : cat.category)}
+                  className={`flex flex-col gap-1.5 p-2.5 rounded-xl transition-all cursor-pointer ${
+                    isSelected
+                      ? 'bg-surface-container-high border border-primary/40 shadow-[0_4px_16px_rgba(0,0,0,0.4)]'
+                      : 'hover:bg-surface-container-high/50 border border-transparent'
+                  }`}
+                >
                   <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <div className={`w-7 h-7 rounded-full ${theme.iconBg} flex items-center justify-center ${theme.textCol}`}>
+                    <div className="flex items-center gap-2.5">
+                      <div className={`w-7 h-7 rounded-full ${theme.iconBg} flex items-center justify-center ${theme.textCol} shadow-sm`}>
                         <span className="material-symbols-outlined text-[16px]">{theme.icon}</span>
                       </div>
                       <div>
-                        <span className="font-body-sm text-[13px] text-on-surface font-semibold">
-                          {cat.category}
-                        </span>
-                        <span className="font-label-sm text-[11px] text-on-surface-variant ml-1.5">
-                          ({cat.count} transacciones)
+                        <div className="flex items-center gap-2">
+                          <span className={`font-body-sm text-[13px] ${isSelected ? 'text-primary font-bold' : 'text-on-surface font-semibold'}`}>
+                            {cat.category}
+                          </span>
+                          {isSelected && (
+                            <span className="px-2 py-0.5 rounded-full bg-primary/20 text-primary text-[10px] font-bold">
+                              Activo ✓
+                            </span>
+                          )}
+                        </div>
+                        <span className="font-label-sm text-[11px] text-on-surface-variant">
+                          {cat.count} transacciones
                         </span>
                       </div>
                     </div>
@@ -278,12 +371,12 @@ export const CategoryPieChart: React.FC<CategoryPieChartProps> = ({ categories }
                       <span className="font-mono-metric text-[14px] text-on-surface font-bold">
                         {formatDOP(cat.total)}
                       </span>
-                      <span className={`font-label-sm text-[11px] ${theme.textCol} ml-1.5 font-semibold`}>
+                      <span className={`font-label-sm text-[11px] ${theme.textCol} ml-1.5 font-bold`}>
                         {cat.percentage}%
                       </span>
                     </div>
                   </div>
-                  <div className="w-full h-2.5 rounded-full bg-surface-container-highest/60 overflow-hidden relative">
+                  <div className="w-full h-2 rounded-full bg-surface-container-highest/60 overflow-hidden relative">
                     <div
                       className={`h-full rounded-full bg-gradient-to-r ${theme.barGrad} relative ${theme.shadow} transition-all duration-500`}
                       style={{ width: `${Math.min(100, Math.max(5, cat.percentage))}%` }}
@@ -301,12 +394,22 @@ export const CategoryPieChart: React.FC<CategoryPieChartProps> = ({ categories }
       {/* Security Footer Callout */}
       <div className="mt-6 pt-3 flex items-center justify-between bg-surface-container-highest/30 border border-outline-variant/15 rounded-xl p-3">
         <div className="flex items-center gap-2 text-on-surface-variant">
-          <span className="material-symbols-outlined text-[18px] text-secondary">shield_with_heart</span>
-          <span className="font-body-sm text-[12px]">Validación bancaria cifrada con token TLS</span>
+          <span className="material-symbols-outlined text-[18px] text-secondary">touch_app</span>
+          <span className="font-body-sm text-[12px]">Haz click en cualquier categoría para filtrado multidimensional</span>
         </div>
-        <span className="font-label-sm text-[11px] font-semibold text-primary uppercase cursor-pointer hover:underline">
-          Detalles Completos →
-        </span>
+        {selectedCategory ? (
+          <button
+            onClick={() => onSelectCategory?.(null)}
+            type="button"
+            className="font-label-sm text-[11px] font-semibold text-primary uppercase cursor-pointer hover:underline"
+          >
+            Limpiar Filtro ✕
+          </button>
+        ) : (
+          <span className="font-label-sm text-[11px] font-semibold text-primary uppercase">
+            Interactividad Activa
+          </span>
+        )}
       </div>
     </div>
   );
