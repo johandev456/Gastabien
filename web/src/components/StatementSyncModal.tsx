@@ -9,16 +9,6 @@ interface StatementSyncModalProps {
   defaultBank?: BankCode;
 }
 
-const SAMPLE_PROMERICA_STATEMENT = `Fecha de Posteo,Fecha Efectiva,No. Secuencia, Código de Transacción,No. Referencia,Descripción,Retiros,Depósitos,Balance,
-"15/09/2026","15/09/2026","1","58-27","15235149","PRIMERA QUINCENA DE SEPTIEMBRE 2026||",0.00,13325.80,13325.80,
-"15/09/2026","15/09/2026","2","57-82","321181","COMPRA POS SM BRAVO LA ESPERILLA    SANTO DOMINGODO",222.00,0.00,13103.80,
-"15/09/2026","15/09/2026","4","57-82","327391","COMPRA POS TOTALENERGIES 27 DE FEB  SANTO DOMINGODO",2000.00,0.00,11004.80,
-"16/09/2026","16/09/2026","6","57-81","341437","RETIRO ATM BANCO RESERVAS R.D 010REPSTDOM     DR DO",2000.00,0.00,8756.80,
-"17/09/2026","17/09/2026","9","57-53","15270158","PAGO CODETEL_PREPAGO 8297908159|40230916591|JOHAN ALEXANDER ROSARIO LOPEZ",230.00,0.00,7700.23,
-"17/09/2026","17/09/2026","10","79-49","15270158","COBRO IMPUESTO CHEQUES Y TRANSF|40230916591|JOHAN ALEXANDER ROSARIO LOPEZ",0.46,0.00,7699.77,
-"20/09/2026","20/09/2026","19","57-81","374497","RETIRO ATM BANCO BHD             SANTO DOMINGO   DO",1000.00,0.00,4289.77,
-"25/09/2026","25/09/2026","27","57-82","410223","COMPRA POS COFFEE SHOP PUCMM S DG   SANTO DOMINGODO",146.44,0.00,1237.89,`;
-
 export const StatementSyncModal: React.FC<StatementSyncModalProps> = ({
   isOpen,
   onClose,
@@ -76,11 +66,6 @@ export const StatementSyncModal: React.FC<StatementSyncModalProps> = ({
       }
     };
     reader.readAsText(file);
-  };
-
-  const loadSample = () => {
-    setStatementText(SAMPLE_PROMERICA_STATEMENT);
-    setError(null);
   };
 
   return (
@@ -259,22 +244,15 @@ export const StatementSyncModal: React.FC<StatementSyncModalProps> = ({
               <div>
                 <div className="flex items-center justify-between mb-2">
                   <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400">
-                    2. Pega los Movimientos o Sube tu Archivo
+                    2. Sube tu Archivo o Pega los Movimientos
                   </label>
-                  <button
-                    type="button"
-                    onClick={loadSample}
-                    className="text-xs text-emerald-400 hover:text-emerald-300 hover:underline font-medium"
-                  >
-                    Cargar Ejemplo
-                  </button>
                 </div>
 
                 <textarea
                   rows={7}
                   value={statementText}
                   onChange={(e) => setStatementText(e.target.value)}
-                  placeholder={`Copia y pega la tabla de movimientos de tu banca en línea de ${bank} o archivo CSV:\n\nEjemplo:\n25/09/2026  TRANSACCION ATM SUCURSAL  RD$ 2,500.00\n22/09/2026  SUPERMERCADOS BRAVO       RD$ 3,420.50\n15/09/2026  ABONO DE NOMINA           RD$ 42,500.00`}
+                  placeholder={`Copia y pega la tabla de movimientos de tu banca en línea de ${bank} o carga tu archivo CSV abajo...`}
                   className="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-emerald-500 font-mono resize-none"
                 />
 

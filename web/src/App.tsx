@@ -118,13 +118,7 @@ export function App() {
           showToast('error', (res as any).error || 'Error al sincronizar con Gmail');
         }
       } else {
-        const res = await ApiClient.triggerSimulateSync();
-        showToast(
-          'success',
-          res.newTransactionsCount > 0
-            ? `¡Sincronización completada! Se procesaron ${res.emailsProcessed} correos bancarios y se registraron ${res.newTransactionsCount} movimientos nuevos.`
-            : '¡Todo al día! No hay transacciones nuevas (todos los movimientos ya coinciden con tu estado de cuenta).'
-        );
+        showToast('error', 'Gmail no está vinculado aún. Puedes subir tu Estado de Cuenta o conectar Gmail en "Bancos RD".');
       }
       await loadData(selectedBanks);
     } catch {
@@ -166,11 +160,10 @@ export function App() {
   };
 
   const handleReset = async () => {
-    if (!window.confirm('¿Deseas reiniciar y recargar los datos de prueba?')) return;
+    if (!window.confirm('¿Deseas eliminar todos los datos y dejar la cuenta en limpio?')) return;
     try {
       await ApiClient.resetData();
-      await ApiClient.triggerSimulateSync();
-      showToast('success', 'Datos reiniciados con transacciones de prueba de RD');
+      showToast('success', 'Todos los movimientos han sido eliminados.');
       await loadData(selectedBanks);
     } catch {
       showToast('error', 'Error al reiniciar datos');
@@ -311,7 +304,6 @@ export function App() {
         isOpen={isBanksModalOpen}
         onClose={() => setIsBanksModalOpen(false)}
         isGmailConnected={isGmailConnected}
-        onSimulateSync={handleSync}
         onTransactionAdded={() => loadData(selectedBanks)}
       />
 

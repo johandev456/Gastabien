@@ -195,9 +195,25 @@ fun DashboardScreen(
                         )
                     }
 
-                    // Category items
-                    items(summary.categories.take(4)) { cat ->
-                        CategoryCardItem(cat, dopFormat)
+                    if (summary.categories.isEmpty()) {
+                        item {
+                            Card(
+                                shape = RoundedCornerShape(14.dp),
+                                colors = CardDefaults.cardColors(containerColor = Slate900),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text(
+                                    text = "Sin categorías aún. Sube tu estado de cuenta para ver el desglose.",
+                                    fontSize = 12.sp,
+                                    color = Slate400,
+                                    modifier = Modifier.padding(16.dp)
+                                )
+                            }
+                        }
+                    } else {
+                        items(summary.categories.take(4)) { cat ->
+                            CategoryCardItem(cat, dopFormat)
+                        }
                     }
 
                     // Recent Transactions Header
@@ -211,9 +227,37 @@ fun DashboardScreen(
                         )
                     }
 
-                    // Transactions items
-                    items(summary.recentTransactions.take(5)) { tx ->
-                        RecentTransactionItem(tx, dopFormat)
+                    if (summary.recentTransactions.isEmpty()) {
+                        item {
+                            Card(
+                                shape = RoundedCornerShape(14.dp),
+                                colors = CardDefaults.cardColors(containerColor = Slate900),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Column(
+                                    modifier = Modifier.padding(20.dp),
+                                    horizontalAlignment = Alignment.CenterHorizontally
+                                ) {
+                                    Text(
+                                        text = "No hay movimientos registrados",
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = Color.White,
+                                        fontSize = 14.sp
+                                    )
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Text(
+                                        text = "Toca el icono 📑 arriba para subir tu estado de cuenta (.csv) o el botón + para agregar un gasto.",
+                                        color = Slate400,
+                                        fontSize = 12.sp,
+                                        modifier = Modifier.padding(horizontal = 8.dp)
+                                    )
+                                }
+                            }
+                        }
+                    } else {
+                        items(summary.recentTransactions.take(5)) { tx ->
+                            RecentTransactionItem(tx, dopFormat)
+                        }
                     }
 
                     item {

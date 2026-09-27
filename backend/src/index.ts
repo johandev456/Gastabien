@@ -26,14 +26,6 @@ app.use(express.json());
 // Initialize Database
 initDatabase();
 
-// Preload demo data if empty so user has immediate rich experience
-try {
-  const summary = syncService.simulateSync('demo-user-id');
-  console.log(`Initialized database with ${summary.newTransactionsCount} initial demo transactions`);
-} catch (e) {
-  console.warn('Initial data seeding skipped:', e);
-}
-
 // Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/sync', syncRoutes);

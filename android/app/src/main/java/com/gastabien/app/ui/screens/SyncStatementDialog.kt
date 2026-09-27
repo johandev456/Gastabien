@@ -1,30 +1,52 @@
 package com.gastabien.app.ui.screens
 
+import android.content.Context
+import android.net.Uri
+import android.provider.OpenableColumns
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import com.gastabien.app.data.models.StatementSyncResponse
 import com.gastabien.app.ui.theme.*
+import java.io.BufferedReader
+import java.io.InputStreamReader
 
-const val SAMPLE_PROMERICA_CSV = """Fecha de Posteo,Fecha Efectiva,No. Secuencia, Código de Transacción,No. Referencia,Descripción,Retiros,Depósitos,Balance,
-"15/09/2026","15/09/2026","1","58-27","15235149","PRIMERA QUINCENA DE SEPTIEMBRE 2026||",0.00,13325.80,13325.80,
-"15/09/2026","15/09/2026","2","57-82","321181","COMPRA POS SM BRAVO LA ESPERILLA    SANTO DOMINGODO",222.00,0.00,13103.80,
-"15/09/2026","15/09/2026","4","57-82","327391","COMPRA POS TOTALENERGIES 27 DE FEB  SANTO DOMINGODO",2000.00,0.00,11004.80,
-"16/09/2026","16/09/2026","6","57-81","341437","RETIRO ATM BANCO RESERVAS R.D 010REPSTDOM     DR DO",2000.00,0.00,8756.80,
-"17/09/2026","17/09/2026","9","57-53","15270158","PAGO CODETEL_PREPAGO 8297908159|40230916591|JOHAN ALEXANDER ROSARIO LOPEZ",230.00,0.00,7700.23,
-"17/09/2026","17/09/2026","10","79-49","15270158","COBRO IMPUESTO CHEQUES Y TRANSF|40230916591|JOHAN ALEXANDER ROSARIO LOPEZ",0.46,0.00,7699.77,
-"20/09/2026","20/09/2026","19","57-81","374497","RETIRO ATM BANCO BHD             SANTO DOMINGO   DO",1000.00,0.00,4289.77,
-"25/09/2026","25/09/2026","27","57-82","410223","COMPRA POS COFFEE SHOP PUCMM S DG   SANTO DOMINGODO",146.44,0.00,1237.89,"""
+fun getFileNameFromUri(context: Context, uri: Uri): String {
+    var name: String? = null
+    if (uri.scheme == "content") {
+        context.contentResolver.query(uri, null, null, null, null)?.use { cursor ->
+            if (cursor.moveToFirst()) {
+                val index = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+                if (index >= 0) {
+                    name = cursor.getString(index)
+                }
+            }
+        }
+    }
+    if (name == null) {
+        name = uri.lastPathSegment ?: "estado_de_cuenta.csv"
+    }
+    return name ?: "estado_de_cuenta.csv"
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -34,8 +56,31 @@ fun SyncStatementDialog(
     isProcessing: Boolean = false,
     report: StatementSyncResponse? = null
 ) {
+    val context = LocalContext.current
     var statementText by remember { mutableStateOf("") }
+    var selectedFileName by remember { mutableStateOf<String?>(null) }
     var bank by remember { mutableStateOf("PROMERICA") }
+    var fileReadError by remember { mutableStateOf<String?>(null) }
+
+    val filePickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        if (uri != null) {
+            try {
+                fileReadError = null
+                val fileName = getFileNameFromUri(context, uri)
+                selectedFileName = fileName
+
+                context.contentResolver.openInputStream(uri)?.use { inputStream ->
+                    val reader = BufferedReader(InputStreamReader(inputStream))
+                    val content = reader.readText()
+                    statementText = content
+                }
+            } catch (e: Exception) {
+                fileReadError = "Error al leer archivo: ${e.localizedMessage}"
+            }
+        }
+    }
 
     Dialog(onDismissRequest = onDismiss) {
         Card(
@@ -43,24 +88,37 @@ fun SyncStatementDialog(
             colors = CardDefaults.cardColors(containerColor = Slate900),
             modifier = Modifier
                 .fillMaxWidth()
-                .fillMaxHeight(0.85f)
+                .fillMaxHeight(0.9f)
         ) {
             Column(
                 modifier = Modifier
                     .padding(20.dp)
                     .verticalScroll(rememberScrollState())
             ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(
+                        text = "📑 Estado de Cuenta",
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White
+                    )
+                    IconButton(
+                        onClick = onDismiss,
+                        modifier = Modifier.size(24.dp)
+                    ) {
+                        Icon(Icons.Default.Close, contentDescription = "Cerrar", tint = Slate400)
+                    }
+                }
+
                 Text(
-                    text = "📑 Conciliar Estado de Cuenta",
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = Color.White
-                )
-                Text(
-                    text = "Pega los movimientos oficiales de tu banco para registrar nómina, cajeros y depurar discrepancias.",
+                    text = "Sube tu archivo .csv o pega los movimientos oficiales de tu banco.",
                     fontSize = 12.sp,
                     color = Slate400,
-                    modifier = Modifier.padding(top = 4.dp, bottom = 16.dp)
+                    modifier = Modifier.padding(top = 4.dp, bottom = 14.dp)
                 )
 
                 if (report != null && report.report != null) {
@@ -68,7 +126,9 @@ fun SyncStatementDialog(
                     Card(
                         shape = RoundedCornerShape(14.dp),
                         colors = CardDefaults.cardColors(containerColor = Emerald600.copy(alpha = 0.15f)),
-                        modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 16.dp)
                     ) {
                         Column(modifier = Modifier.padding(14.dp)) {
                             Text(
@@ -79,9 +139,10 @@ fun SyncStatementDialog(
                             )
                             Spacer(modifier = Modifier.height(8.dp))
                             Text(
-                                text = "• Verificados: ${rep.matchedCount}\n• Agregados (Nómina/ATM): ${rep.addedCount}\n• Actualizados: ${rep.updatedCount}\n• Descartados (No en banco): ${rep.removedCount}",
+                                text = "• Movimientos analizados: ${rep.totalStatementEntries}\n• Verificados: ${rep.matchedCount}\n• Nuevos agregados: ${rep.addedCount}\n• Nombres corregidos: ${rep.updatedCount}\n• Descartados (No en banco): ${rep.removedCount}",
                                 color = Color.White,
-                                fontSize = 12.sp
+                                fontSize = 12.sp,
+                                lineHeight = 18.sp
                             )
                             Spacer(modifier = Modifier.height(8.dp))
                             Text(
@@ -96,64 +157,102 @@ fun SyncStatementDialog(
 
                 // Bank Selection
                 Text(
-                    text = "Banco:",
+                    text = "1. Selecciona el Banco:",
                     fontSize = 12.sp,
-                    fontWeight = FontWeight.Medium,
-                    color = Slate400
+                    fontWeight = FontWeight.SemiBold,
+                    color = Slate300
                 )
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(vertical = 8.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     listOf("PROMERICA", "POPULAR", "BHD", "QIK").forEach { b ->
                         FilterChip(
                             selected = bank == b,
                             onClick = { bank = b },
-                            label = { Text(b, fontSize = 11.sp) },
+                            label = { Text(b, fontSize = 10.sp, fontWeight = FontWeight.Bold) },
                             colors = FilterChipDefaults.filterChipColors(
                                 selectedContainerColor = Emerald600,
-                                selectedLabelColor = Color.White
+                                selectedLabelColor = Color.White,
+                                containerColor = Slate800,
+                                labelColor = Slate400
                             )
                         )
                     }
                 }
 
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(10.dp))
 
-                Row(
+                // File Upload Button
+                Text(
+                    text = "2. Cargar Archivo del Banco:",
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = Slate300
+                )
+
+                Spacer(modifier = Modifier.height(6.dp))
+
+                Button(
+                    onClick = {
+                        // Open file picker for all mime types (csv, txt, etc.)
+                        filePickerLauncher.launch("*/*")
+                    },
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = Slate800)
                 ) {
-                    Text(
-                        text = "Texto / CSV del Estado:",
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Medium,
-                        color = Slate400
+                    Icon(
+                        Icons.Default.AttachFile,
+                        contentDescription = "Subir Archivo",
+                        tint = Emerald400,
+                        modifier = Modifier.size(18.dp)
                     )
-                    TextButton(
-                        onClick = { statementText = SAMPLE_PROMERICA_CSV },
-                        contentPadding = PaddingValues(0.dp)
-                    ) {
-                        Text("Cargar Ejemplo", color = Emerald400, fontSize = 11.sp)
-                    }
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = if (selectedFileName != null) "Archivo: $selectedFileName" else "Seleccionar Archivo (.csv / .txt)",
+                        color = if (selectedFileName != null) Emerald400 else Color.White,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
                 }
+
+                if (fileReadError != null) {
+                    Text(
+                        text = fileReadError ?: "",
+                        color = Rose500,
+                        fontSize = 11.sp,
+                        modifier = Modifier.padding(top = 4.dp)
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(14.dp))
+
+                // Raw Text Box (Can be typed/pasted or filled by file)
+                Text(
+                    text = "O pega el texto directamente:",
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = Slate300
+                )
+
+                Spacer(modifier = Modifier.height(6.dp))
 
                 OutlinedTextField(
                     value = statementText,
                     onValueChange = { statementText = it },
                     placeholder = {
                         Text(
-                            "Pega aquí la tabla o CSV copiado de tu banco...",
+                            "Contenido del estado de cuenta...",
                             color = Slate500,
                             fontSize = 12.sp
                         )
                     },
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(180.dp),
+                        .height(140.dp),
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedBorderColor = Emerald600,
                         unfocusedBorderColor = Slate700,
@@ -192,7 +291,7 @@ fun SyncStatementDialog(
                                 strokeWidth = 2.dp
                             )
                         } else {
-                            Text("Conciliar", color = Color.White)
+                            Text("Conciliar", color = Color.White, fontWeight = FontWeight.Bold)
                         }
                     }
                 }

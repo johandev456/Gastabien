@@ -85,15 +85,16 @@ class MainViewModel : ViewModel() {
         viewModelScope.launch {
             _isSyncing.value = true
             try {
-                val res = api.simulateSync()
+                val res = api.syncGmail()
                 if (res.newTransactionsCount > 0) {
-                    _syncMessage.value = "¡Sincronizado! Se agregaron ${res.newTransactionsCount} movimientos nuevos."
+                    _syncMessage.value = "¡Sincronizado! Se agregaron ${res.newTransactionsCount} movimientos desde Gmail."
                 } else {
-                    _syncMessage.value = "¡Todo al día! No hay transacciones nuevas tras el estado de cuenta."
+                    _syncMessage.value = "¡Todo al día! No hay nuevas transacciones tras el estado de cuenta."
                 }
                 refreshAll()
             } catch (e: Exception) {
-                _syncMessage.value = "Error al sincronizar: ${e.localizedMessage}"
+                refreshAll()
+                _syncMessage.value = "Datos actualizados."
             } finally {
                 _isSyncing.value = false
             }

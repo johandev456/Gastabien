@@ -15,7 +15,6 @@ const transactions_routes_1 = __importDefault(require("./routes/transactions.rou
 const analytics_routes_1 = __importDefault(require("./routes/analytics.routes"));
 const banks_routes_1 = __importDefault(require("./routes/banks.routes"));
 const statement_routes_1 = __importDefault(require("./routes/statement.routes"));
-const sync_service_1 = require("./services/sync.service");
 const app = (0, express_1.default)();
 // Middleware
 app.use((0, cors_1.default)({
@@ -27,14 +26,6 @@ app.options('*', (0, cors_1.default)());
 app.use(express_1.default.json());
 // Initialize Database
 (0, db_1.initDatabase)();
-// Preload demo data if empty so user has immediate rich experience
-try {
-    const summary = sync_service_1.syncService.simulateSync('demo-user-id');
-    console.log(`Initialized database with ${summary.newTransactionsCount} initial demo transactions`);
-}
-catch (e) {
-    console.warn('Initial data seeding skipped:', e);
-}
 // Routes
 app.use('/api/auth', auth_routes_1.default);
 app.use('/api/sync', sync_routes_1.default);

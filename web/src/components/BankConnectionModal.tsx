@@ -17,7 +17,6 @@ interface BankConnectionModalProps {
   isOpen: boolean;
   onClose: () => void;
   isGmailConnected?: boolean;
-  onSimulateSync: () => void;
   onTransactionAdded?: () => void;
 }
 
@@ -25,7 +24,6 @@ export const BankConnectionModal: React.FC<BankConnectionModalProps> = ({
   isOpen,
   onClose,
   isGmailConnected = false,
-  onSimulateSync,
   onTransactionAdded
 }) => {
   const [activeTab, setActiveTab] = useState<'gmail' | 'paste' | 'banks'>('gmail');
@@ -232,21 +230,6 @@ export const BankConnectionModal: React.FC<BankConnectionModalProps> = ({
                 <li>En <strong>Credentials</strong>, crea un <em>OAuth Client ID (Web Application)</em> con URI de redirección: <code className="bg-slate-900 px-1 py-0.5 rounded text-emerald-300">http://localhost:4000/api/auth/google/callback</code>.</li>
                 <li>Copia tu <code className="text-amber-300">GOOGLE_CLIENT_ID</code> y <code className="text-amber-300">GOOGLE_CLIENT_SECRET</code> en el archivo <code className="text-white">backend/.env</code>.</li>
               </ol>
-            </div>
-
-            {/* Instant Demo Simulation */}
-            <div className="pt-2 flex items-center justify-between gap-3">
-              <span className="text-xs text-slate-400">¿Quieres probar ahora mismo con correos de prueba?</span>
-              <button
-                onClick={() => {
-                  onSimulateSync();
-                  onClose();
-                }}
-                className="px-4 py-2 rounded-xl text-xs font-bold bg-slate-800 hover:bg-slate-700 text-emerald-400 border border-emerald-800/50 flex items-center gap-1.5 shadow"
-              >
-                <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-                <span>Cargar 10 Correos de Ejemplo</span>
-              </button>
             </div>
           </div>
         )}

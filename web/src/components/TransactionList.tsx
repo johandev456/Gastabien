@@ -196,11 +196,10 @@ export const TransactionList: React.FC<TransactionListProps> = ({
         )}
       </div>
 
-      {/* Transactions Table / List */}
       {filtered.length === 0 ? (
         <div className="py-12 text-center">
-          <p className="text-slate-400 font-medium">No se encontraron transacciones con los filtros seleccionados.</p>
-          <p className="text-xs text-slate-500 mt-1">Prueba sincronizar con Gmail o pulsar "Sincronizar" en la barra superior.</p>
+          <p className="text-slate-400 font-medium">No se encontraron transacciones registradas.</p>
+          <p className="text-xs text-slate-500 mt-1">Sube tu Estado de Cuenta o conecta tu correo para comenzar.</p>
         </div>
       ) : (
         <div className="overflow-x-auto">
