@@ -17,7 +17,6 @@ export class ApiClient {
     const headers = {
       'Content-Type': 'application/json',
       'x-user-id': USER_ID,
-      'Bypass-Tunnel-Reminder': 'true',
       ...(options.headers || {})
     };
 

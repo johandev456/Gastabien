@@ -17,9 +17,10 @@ const app = express();
 // Middleware
 app.use(cors({
   origin: '*',
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'x-user-id']
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'x-user-id', 'Bypass-Tunnel-Reminder', 'bypass-tunnel-reminder', '*']
 }));
+app.options('*', cors());
 app.use(express.json());
 
 // Initialize Database
