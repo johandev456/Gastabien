@@ -73,7 +73,13 @@ router.put('/:id', (req, res) => {
     const updated = db_1.dbOps.getTransactionById(userId, req.params.id);
     return res.json(updated);
 });
-// Delete transaction
+// Delete all transactions for user
+router.delete('/', (req, res) => {
+    const userId = req.headers['x-user-id'] || req.query.userId || 'demo-user-id';
+    db_1.dbOps.clearAllData(userId);
+    return res.json({ success: true, message: 'Todas las transacciones y datos han sido eliminados con éxito' });
+});
+// Delete single transaction
 router.delete('/:id', (req, res) => {
     const userId = req.headers['x-user-id'] || req.query.userId || 'demo-user-id';
     const success = db_1.dbOps.deleteTransaction(userId, req.params.id);

@@ -130,9 +130,15 @@ export class ApiClient {
     });
   }
 
-  public static async resetData(): Promise<{ success: boolean }> {
-    return this.request<{ success: boolean }>('/sync/reset', {
+  public static async resetData(): Promise<{ success: boolean; message?: string }> {
+    return this.request<{ success: boolean; message?: string }>('/sync/reset', {
       method: 'POST'
+    });
+  }
+
+  public static async clearAllTransactions(): Promise<{ success: boolean; message: string }> {
+    return this.request<{ success: boolean; message: string }>('/transactions', {
+      method: 'DELETE'
     });
   }
 

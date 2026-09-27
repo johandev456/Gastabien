@@ -157,6 +157,19 @@ export function App() {
     }
   };
 
+  const handleClearAllTransactions = async () => {
+    if (!window.confirm('⚠️ ¿Estás seguro de que deseas borrar TODAS las transacciones registradas? Esta acción limpiará todos los gastos, ingresos y datos de conciliación.')) {
+      return;
+    }
+    try {
+      await ApiClient.clearAllTransactions();
+      showToast('success', 'Todas las transacciones han sido eliminadas correctamente.');
+      await loadData(selectedBanks);
+    } catch {
+      showToast('error', 'Error al borrar las transacciones.');
+    }
+  };
+
   return (
     <div className="bg-background font-body-md text-on-surface min-h-screen relative overflow-x-hidden selection:bg-primary-container selection:text-on-primary-container">
       {/* Ambient Background Glow Blobs */}
@@ -288,6 +301,7 @@ export function App() {
           transactions={transactions}
           onUpdateCategory={handleUpdateCategory}
           onDelete={handleDeleteTransaction}
+          onClearAll={handleClearAllTransactions}
           loading={loading}
         />
       </main>

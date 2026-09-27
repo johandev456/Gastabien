@@ -5,6 +5,7 @@ interface TransactionListProps {
   transactions: Transaction[];
   onUpdateCategory: (id: string, newCategory: Category) => void;
   onDelete: (id: string) => void;
+  onClearAll?: () => void;
   loading?: boolean;
 }
 
@@ -27,6 +28,7 @@ export const TransactionList: React.FC<TransactionListProps> = ({
   transactions,
   onUpdateCategory,
   onDelete,
+  onClearAll,
   loading = false
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
@@ -112,16 +114,29 @@ export const TransactionList: React.FC<TransactionListProps> = ({
             Lectura automatizada por push notifications & extractos RD
           </p>
         </div>
-        <button
-          onClick={() => setShowAllTable(!showAllTable)}
-          type="button"
-          className="inline-flex items-center gap-1.5 text-primary font-body-sm text-[13px] hover:underline font-semibold cursor-pointer"
-        >
-          <span>{showAllTable ? 'Mostrar Vista Resumida' : `Ver todas las ${transactions.length} transacciones`}</span>
-          <span className="material-symbols-outlined text-[16px]">
-            {showAllTable ? 'expand_less' : 'arrow_forward'}
-          </span>
-        </button>
+        <div className="flex items-center gap-3">
+          {transactions.length > 0 && onClearAll && (
+            <button
+              onClick={onClearAll}
+              type="button"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-error-container/20 hover:bg-error-container/40 text-error font-body-sm text-[12px] font-semibold transition-all border border-error/30 cursor-pointer shadow-sm"
+              title="Borrar todas las transacciones registradas"
+            >
+              <span className="material-symbols-outlined text-[16px]">delete_sweep</span>
+              <span>Borrar Datos</span>
+            </button>
+          )}
+          <button
+            onClick={() => setShowAllTable(!showAllTable)}
+            type="button"
+            className="inline-flex items-center gap-1.5 text-primary font-body-sm text-[13px] hover:underline font-semibold cursor-pointer"
+          >
+            <span>{showAllTable ? 'Mostrar Vista Resumida' : `Ver todas las ${transactions.length} transacciones`}</span>
+            <span className="material-symbols-outlined text-[16px]">
+              {showAllTable ? 'expand_less' : 'arrow_forward'}
+            </span>
+          </button>
+        </div>
       </div>
 
       {/* Quick 4-Grid Preview Cards (always shown or when table is not expanded) */}
