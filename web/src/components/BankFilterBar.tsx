@@ -1,5 +1,4 @@
 import React from 'react';
-import { Building2, Check, Sparkles } from 'lucide-react';
 import { BankCode } from '../types';
 
 interface BankFilterBarProps {
@@ -15,105 +14,73 @@ export const BankFilterBar: React.FC<BankFilterBarProps> = ({
 }) => {
   const isAllSelected = selectedBanks.length === 0 || selectedBanks.includes('ALL');
 
-  const banks: { code: BankCode; name: string; short: string; color: string; activeBorder: string; activeBg: string }[] = [
+  const banks: { code: BankCode; label: string; dotColor: string; glowColor: string }[] = [
     {
       code: 'PROMERICA',
-      name: 'Banco Promerica',
-      short: 'Promerica',
-      color: 'text-teal-400',
-      activeBorder: 'border-teal-500 bg-teal-950/70 text-teal-200 shadow-teal-950/50',
-      activeBg: 'bg-teal-500'
+      label: 'PROMERICA',
+      dotColor: 'bg-[#00e676]',
+      glowColor: 'shadow-[0_0_5px_#00e676]'
     },
     {
       code: 'POPULAR',
-      name: 'Banco Popular',
-      short: 'Popular',
-      color: 'text-blue-400',
-      activeBorder: 'border-blue-500 bg-blue-950/70 text-blue-200 shadow-blue-950/50',
-      activeBg: 'bg-blue-500'
+      label: 'POPULAR',
+      dotColor: 'bg-[#00d8f6]',
+      glowColor: 'shadow-[0_0_5px_#00d8f6]'
     },
     {
       code: 'BHD',
-      name: 'Banco BHD',
-      short: 'BHD',
-      color: 'text-emerald-400',
-      activeBorder: 'border-emerald-500 bg-emerald-950/70 text-emerald-200 shadow-emerald-950/50',
-      activeBg: 'bg-emerald-500'
+      label: 'BHD',
+      dotColor: 'bg-[#ffcc00]',
+      glowColor: 'shadow-[0_0_5px_#ffcc00]'
     },
     {
       code: 'QIK',
-      name: 'Qik Banco Digital',
-      short: 'Qik',
-      color: 'text-purple-400',
-      activeBorder: 'border-purple-500 bg-purple-950/70 text-purple-200 shadow-purple-950/50',
-      activeBg: 'bg-purple-500'
+      label: 'QIK',
+      dotColor: 'bg-[#d038f0]',
+      glowColor: 'shadow-[0_0_5px_#d038f0]'
     }
   ];
 
   return (
-    <div className="glass-card rounded-2xl p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 border border-slate-800">
-      
-      {/* Title / Info */}
-      <div className="flex items-center gap-2 text-xs text-slate-300">
-        <div className="p-1.5 rounded-lg bg-slate-800 text-emerald-400">
-          <Building2 className="w-4 h-4" />
+    <section className="retro-box p-3.5 mb-6" data-purpose="bank-filter-bar">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+        <div className="flex items-center space-x-2 font-pixel text-[10px] text-arcade-gold">
+          <span className="text-arcade-green animate-retro-blink">▶</span>
+          <span>SELECT BANK / FILTRAR BANCO:</span>
         </div>
-        <div>
-          <span className="font-bold text-white block">Filtrar Todo por Banco:</span>
-          <span className="text-[11px] text-slate-400">
-            {isAllSelected
-              ? 'Mostrando todos los bancos dominicanos'
-              : `Filtrando gráficos y balances por: ${selectedBanks.join(', ')}`}
-          </span>
-        </div>
-      </div>
-
-      {/* Filter Buttons */}
-      <div className="flex flex-wrap items-center gap-1.5">
-        
-        {/* All Banks chip */}
-        <button
-          onClick={onSelectAll}
-          className={`px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all flex items-center gap-1.5 ${
-            isAllSelected
-              ? 'bg-emerald-600 border-emerald-500 text-white shadow-md shadow-emerald-950/40'
-              : 'bg-slate-900/80 border-slate-800 text-slate-400 hover:text-white hover:border-slate-700'
-          }`}
-        >
-          {isAllSelected && <Check className="w-3.5 h-3.5" />}
-          <span>Todos</span>
-        </button>
-
-        {/* Bank Chips */}
-        {banks.map((b) => {
-          const isSelected = selectedBanks.includes(b.code);
-          return (
-            <button
-              key={b.code}
-              onClick={() => onToggleBank(b.code)}
-              className={`px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all flex items-center gap-1.5 shadow-sm ${
-                isSelected
-                  ? `${b.activeBorder} ring-1 ring-white/10`
-                  : 'bg-slate-900/80 border-slate-800 text-slate-400 hover:text-white hover:border-slate-700'
-              }`}
-            >
-              <span className={`w-2 h-2 rounded-full ${isSelected ? b.activeBg : 'bg-slate-600'}`} />
-              <span>{b.short}</span>
-              {isSelected && <Check className="w-3 h-3 ml-0.5" />}
-            </button>
-          );
-        })}
-
-        {!isAllSelected && (
+        <div className="flex flex-wrap items-center gap-2 font-pixel text-[9px]">
+          {/* All Active Pill */}
           <button
             onClick={onSelectAll}
-            className="text-[11px] text-slate-400 hover:text-rose-400 underline ml-1 px-1"
+            className={`px-3.5 py-1.5 border-2 border-black font-bold tracking-wide transition-all cursor-pointer ${
+              isAllSelected
+                ? 'bg-[#39ff14] text-black shadow-[2px_2px_0px_#ffcc00]'
+                : 'bg-[#0d1e4c] text-white hover:text-[#39ff14] border-[#1e3c84] shadow-[2px_2px_0px_#000]'
+            }`}
           >
-            Limpiar filtro
+            [★ TODOS]
           </button>
-        )}
-      </div>
 
-    </div>
+          {/* Individual Bank Pills */}
+          {banks.map((b) => {
+            const isSelected = selectedBanks.includes(b.code);
+            return (
+              <button
+                key={b.code}
+                onClick={() => onToggleBank(b.code)}
+                className={`px-3 py-1.5 border-2 shadow-[2px_2px_0px_#000] flex items-center space-x-1.5 transition-all cursor-pointer ${
+                  isSelected
+                    ? 'bg-[#183272] text-[#00ffff] border-[#00ffff] font-bold shadow-[2px_2px_0px_#ffd700]'
+                    : 'bg-[#0d1e4c] text-white hover:text-[#00ffff] border-[#1e3c84] hover:border-[#00ffff]'
+                }`}
+              >
+                <span className={`w-2 h-2 ${b.dotColor} ${b.glowColor}`}></span>
+                <span>{b.label}</span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    </section>
   );
 };

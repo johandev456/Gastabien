@@ -4,32 +4,190 @@
 
 @layer base {
   body {
-    @apply bg-slate-950 text-slate-100 antialiased;
-    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+    background-color: #080816;
+    color: #e2e8f0;
+    font-family: 'Silkscreen', 'VT323', monospace;
+    min-height: 100vh;
+    position: relative;
+    overflow-x: hidden;
   }
+}
+
+/* Retro CRT Scanlines & Screen Flicker */
+.crt-scanlines {
+  position: fixed;
+  inset: 0;
+  background: linear-gradient(rgba(18, 16, 38, 0) 50%, rgba(0, 0, 0, 0.45) 50%);
+  background-size: 100% 4px;
+  pointer-events: none;
+  z-index: 40;
+  opacity: 0.65;
+}
+
+.crt-vignette {
+  position: fixed;
+  inset: 0;
+  box-shadow: inset 0 0 100px rgba(0, 0, 0, 0.9), inset 0 0 40px rgba(57, 255, 20, 0.05);
+  pointer-events: none;
+  z-index: 41;
+}
+
+/* 8-Bit / 16-Bit Classic RPG Box Framing */
+.retro-box {
+  background: #111132;
+  border: 4px solid #ffffff;
+  box-shadow: 
+    0 0 0 4px #000000,
+    inset 4px 4px 0px #2a2a6b,
+    inset -4px -4px 0px #090918,
+    0 8px 0px rgba(0, 0, 0, 0.7);
+  position: relative;
+}
+
+.retro-box-gold {
+  background: #15112e;
+  border: 4px solid #ffd700;
+  box-shadow: 
+    0 0 0 4px #000000,
+    inset 4px 4px 0px #5e4b00,
+    inset -4px -4px 0px #1a1200,
+    0 8px 0px rgba(0, 0, 0, 0.7);
+}
+
+/* Pixel Button Styling */
+.pixel-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'Press Start 2P', monospace;
+  font-size: 10px;
+  line-height: 1;
+  padding: 10px 14px;
+  text-transform: uppercase;
+  border: 3px solid #000000;
+  cursor: pointer;
+  user-select: none;
+  transition: transform 0.05s ease, box-shadow 0.05s ease;
+}
+.pixel-btn:active {
+  transform: translate(2px, 2px);
+  box-shadow: 1px 1px 0px #000000 !important;
+}
+
+.pixel-btn-primary {
+  background: #39ff14;
+  color: #000000;
+  box-shadow: inset -3px -3px 0px #128000, inset 3px 3px 0px #adff99, 4px 4px 0px #000000;
+}
+.pixel-btn-primary:hover {
+  background: #4bff29;
+}
+
+.pixel-btn-coin {
+  background: #ff2a85;
+  color: #ffffff;
+  box-shadow: inset -3px -3px 0px #800038, inset 3px 3px 0px #ff94c2, 4px 4px 0px #000000;
+}
+.pixel-btn-coin:hover {
+  background: #ff4797;
+}
+
+.pixel-btn-cyan {
+  background: #00ffff;
+  color: #000000;
+  box-shadow: inset -3px -3px 0px #007788, inset 3px 3px 0px #b3ffff, 4px 4px 0px #000000;
+}
+.pixel-btn-cyan:hover {
+  background: #33ffff;
+}
+
+.pixel-btn-dark {
+  background: #242456;
+  color: #ffd700;
+  box-shadow: inset -3px -3px 0px #0f0f26, inset 3px 3px 0px #4d4d94, 4px 4px 0px #000000;
+}
+.pixel-btn-dark:hover {
+  background: #2e2e6d;
+  color: #ffffff;
+}
+
+/* Pixel Health/Mana Segment Bar */
+.pixel-meter {
+  background: #000000;
+  border: 2px solid #555588;
+  box-shadow: inset 2px 2px 0px #000000;
+  height: 14px;
+  position: relative;
+  overflow: hidden;
+}
+.pixel-meter-fill {
+  height: 100%;
+  background-image: repeating-linear-gradient(
+    90deg,
+    currentColor 0px,
+    currentColor 8px,
+    #000000 8px,
+    #000000 10px
+  );
+}
+
+/* 8-bit text glow & shadows */
+.pixel-text-shadow {
+  text-shadow: 2px 2px 0px #000000;
+}
+.pixel-text-glow-green {
+  text-shadow: 2px 2px 0px #000000, 0 0 8px rgba(57, 255, 20, 0.7);
+}
+.pixel-text-glow-red {
+  text-shadow: 2px 2px 0px #000000, 0 0 8px rgba(255, 51, 68, 0.7);
+}
+.pixel-text-glow-gold {
+  text-shadow: 2px 2px 0px #000000, 0 0 8px rgba(255, 215, 0, 0.7);
+}
+.pixel-text-glow-cyan {
+  text-shadow: 2px 2px 0px #000000, 0 0 8px rgba(0, 255, 255, 0.7);
+}
+
+/* Retro CRT Grid lines */
+.retro-grid {
+  background-size: 32px 32px;
+  background-image: 
+    linear-gradient(to right, rgba(80, 80, 160, 0.08) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(80, 80, 160, 0.08) 1px, transparent 1px);
+}
+
+/* Blinking arcade animations */
+@keyframes retro-blink {
+  0%, 49% { opacity: 1; }
+  50%, 100% { opacity: 0; }
+}
+.animate-retro-blink {
+  animation: retro-blink 1s infinite;
 }
 
 /* Custom scrollbars */
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 8px;
+  height: 8px;
 }
 
 ::-webkit-scrollbar-track {
-  background: #090d16;
+  background: #080816;
+  border: 1px solid #111132;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #1e293b;
-  border-radius: 9999px;
+  background: #3b3b77;
+  border: 1px solid #ffd700;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #334155;
+  background: #5555aa;
 }
 
 .glass-card {
-  background: rgba(15, 23, 42, 0.75);
-  backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: #111132;
+  border: 3px solid #3b3b77;
+  box-shadow: 0 0 0 2px #000000, inset 2px 2px 0px #2a2a6b, 0 4px 0px rgba(0,0,0,0.6);
 }
+

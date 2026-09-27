@@ -1,128 +1,123 @@
 import React from 'react';
-import { Wallet, TrendingDown, TrendingUp, Receipt, ArrowUpRight, ArrowDownRight } from 'lucide-react';
 import { AnalyticsSummary } from '../types';
 
 interface SummaryCardsProps {
   summary: AnalyticsSummary | null;
-  loading: boolean;
+  loading?: boolean;
 }
 
-export const SummaryCards: React.FC<SummaryCardsProps> = ({ summary, loading }) => {
+export const SummaryCards: React.FC<SummaryCardsProps> = ({ summary, loading = false }) => {
   const formatDOP = (amount: number) => {
     return new Intl.NumberFormat('es-DO', {
       style: 'currency',
       currency: 'DOP',
-      minimumFractionDigits: 2
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
     }).format(amount);
   };
 
-  if (loading || !summary) {
+  const balance = summary ? summary.netBalance : 0;
+  const isPositive = balance >= 0;
+  const categoriesCount = summary?.categories ? summary.categories.length : 0;
+  const totalTransactions = summary ? summary.transactionsCount : 0;
+
+  if (loading) {
     return (
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 animate-pulse">
-        {[1, 2, 3, 4].map(i => (
-          <div key={i} className="h-32 rounded-2xl bg-slate-900/60 border border-slate-800/60" />
+      <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6" data-purpose="kpi-cards">
+        {[1, 2, 3, 4].map((i) => (
+          <div key={i} className="retro-box p-4 animate-pulse h-32 flex flex-col justify-between">
+            <div className="h-3 bg-[#3b3b77] w-1/2"></div>
+            <div className="h-6 bg-[#3b3b77] w-3/4"></div>
+            <div className="h-3 bg-[#3b3b77] w-1/3"></div>
+          </div>
         ))}
-      </div>
+      </section>
     );
   }
 
-  const isNetPositive = summary.netBalance >= 0;
-
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-      
-      {/* Balance Neto */}
-      <div className="glass-card rounded-2xl p-5 relative overflow-hidden group hover:border-emerald-500/40 transition-all">
-        <div className="flex items-center justify-between">
-          <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">
-            Balance Neto
+    <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6" data-purpose="kpi-cards">
+      {/* Card 1: Balance Neto (Player 1 HP - Phosphor Green) */}
+      <div className="retro-box p-4 border-[#39ff14]/70" style={{ background: 'linear-gradient(180deg, #092015 0%, #030d08 100%)' }}>
+        <div className="flex items-center justify-between border-b-2 border-dashed border-[#1e5835] pb-2">
+          <span className="font-pixel text-[9px] text-[#39ff14] tracking-wider">1P // BALANCE HP</span>
+          <span className="font-pixel text-[8px] bg-black text-[#39ff14] px-1.5 py-0.5 border border-[#39ff14] shadow-[1px_1px_0px_#000]">
+            LVL 99
           </span>
-          <div className={`p-2.5 rounded-xl ${isNetPositive ? 'bg-emerald-500/10 text-emerald-400' : 'bg-rose-500/10 text-rose-400'}`}>
-            <Wallet className="w-5 h-5" />
-          </div>
         </div>
         <div className="mt-3">
-          <h3 className={`text-2xl sm:text-3xl font-bold tracking-tight ${isNetPositive ? 'text-emerald-400' : 'text-rose-400'}`}>
-            {formatDOP(summary.netBalance)}
-          </h3>
-          <div className="flex items-center gap-1.5 mt-1.5 text-xs text-slate-400">
-            {isNetPositive ? (
-              <span className="flex items-center text-emerald-400 font-medium">
-                <ArrowUpRight className="w-3.5 h-3.5" /> Superávit
-              </span>
-            ) : (
-              <span className="flex items-center text-rose-400 font-medium">
-                <ArrowDownRight className="w-3.5 h-3.5" /> Déficit
-              </span>
-            )}
-            <span>• Ingresos - Gastos</span>
+          <div className="font-pixel text-lg sm:text-xl text-[#39ff14] pixel-text-glow-green tracking-tight">
+            {formatDOP(balance)}
+          </div>
+          <div className="mt-2.5 flex items-center space-x-2">
+            <span className={`font-pixel text-[8px] px-1.5 py-0.5 border border-black font-bold shadow-[2px_2px_0px_#000] ${
+              isPositive ? 'bg-[#39ff14] text-black' : 'bg-[#ff3344] text-white'
+            }`}>
+              {isPositive ? '▲ LEVEL UP!' : '▼ CRITICAL HP!'}
+            </span>
+            <span className="font-vt text-sm text-[#7bfdb0] tracking-wide">
+              {isPositive ? 'SUPERÁVIT ACTIVO' : 'DÉFICIT ACTIVO'}
+            </span>
           </div>
         </div>
       </div>
 
-      {/* Total Gastos */}
-      <div className="glass-card rounded-2xl p-5 relative overflow-hidden group hover:border-rose-500/40 transition-all">
-        <div className="flex items-center justify-between">
-          <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">
-            Total Gastos
+      {/* Card 2: Total Gastos (Damage Taken - Crimson Arcade Red) */}
+      <div className="retro-box p-4 border-[#ff3344]/70" style={{ background: 'linear-gradient(180deg, #2b0b14 0%, #130307 100%)' }}>
+        <div className="flex items-center justify-between border-b-2 border-dashed border-[#6c1626] pb-2">
+          <span className="font-pixel text-[9px] text-[#ff3344] tracking-wider">DAMAGE // GASTOS</span>
+          <span className="font-pixel text-[8px] bg-black text-[#ff3344] px-1.5 py-0.5 border border-[#ff3344] shadow-[1px_1px_0px_#000]">
+            -HIT
           </span>
-          <div className="p-2.5 rounded-xl bg-rose-500/10 text-rose-400">
-            <TrendingDown className="w-5 h-5" />
-          </div>
         </div>
         <div className="mt-3">
-          <h3 className="text-2xl sm:text-3xl font-bold tracking-tight text-white">
-            {formatDOP(summary.totalExpenses)}
-          </h3>
-          <div className="flex items-center gap-1.5 mt-1.5 text-xs text-slate-400">
-            <span className="text-rose-400 font-medium">{summary.categories.length} categorías</span>
-            <span>analizadas</span>
+          <div className="font-pixel text-lg sm:text-xl text-[#ff3344] pixel-text-glow-red tracking-tight">
+            {formatDOP(summary?.totalExpenses || 0)}
+          </div>
+          <div className="mt-2.5 flex items-center space-x-2 font-vt text-base">
+            <span className="text-[#ff6b7d] font-bold">{categoriesCount} CATEGORÍAS</span>
+            <span className="text-slate-400">EN COMBATE</span>
           </div>
         </div>
       </div>
 
-      {/* Total Ingresos */}
-      <div className="glass-card rounded-2xl p-5 relative overflow-hidden group hover:border-emerald-500/40 transition-all">
-        <div className="flex items-center justify-between">
-          <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">
-            Total Ingresos
+      {/* Card 3: Total Ingresos (Total Score / Gold - Radiant Arcade Gold) */}
+      <div className="retro-box p-4 border-[#ffcc00]/70" style={{ background: 'linear-gradient(180deg, #2a2004 0%, #140e01 100%)' }}>
+        <div className="flex items-center justify-between border-b-2 border-dashed border-[#6e5100] pb-2">
+          <span className="font-pixel text-[9px] text-[#ffcc00] tracking-wider">HIGH SCORE // GOLD</span>
+          <span className="font-pixel text-[8px] bg-black text-[#ffcc00] px-1.5 py-0.5 border border-[#ffcc00] shadow-[1px_1px_0px_#000]">
+            GOLD
           </span>
-          <div className="p-2.5 rounded-xl bg-emerald-500/10 text-emerald-400">
-            <TrendingUp className="w-5 h-5" />
-          </div>
         </div>
         <div className="mt-3">
-          <h3 className="text-2xl sm:text-3xl font-bold tracking-tight text-white">
-            {formatDOP(summary.totalIncome)}
-          </h3>
-          <div className="flex items-center gap-1.5 mt-1.5 text-xs text-slate-400">
-            <span className="text-emerald-400 font-medium">Nómina y abonos</span>
-            <span>detectados</span>
+          <div className="font-pixel text-lg sm:text-xl text-[#ffcc00] pixel-text-glow-gold tracking-tight">
+            {formatDOP(summary?.totalIncome || 0)}
+          </div>
+          <div className="mt-2.5 flex items-center space-x-2 font-vt text-base">
+            <span className="text-[#00ffff] font-bold">NÓMINA & ABONOS</span>
+            <span className="text-slate-400">COBRADOS</span>
           </div>
         </div>
       </div>
 
-      {/* Transacciones */}
-      <div className="glass-card rounded-2xl p-5 relative overflow-hidden group hover:border-indigo-500/40 transition-all">
-        <div className="flex items-center justify-between">
-          <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">
-            Transacciones
+      {/* Card 4: Transacciones (Quests / Combos - Deep Capcom Purple) */}
+      <div className="retro-box p-4 border-[#b538f0]/70" style={{ background: 'linear-gradient(180deg, #1f0b35 0%, #0c0416 100%)' }}>
+        <div className="flex items-center justify-between border-b-2 border-dashed border-[#551980] pb-2">
+          <span className="font-pixel text-[9px] text-[#d65dff] tracking-wider">QUESTS // COMBOS</span>
+          <span className="font-pixel text-[8px] bg-black text-[#d65dff] px-1.5 py-0.5 border border-[#d65dff] shadow-[1px_1px_0px_#000]">
+            SYNC
           </span>
-          <div className="p-2.5 rounded-xl bg-indigo-500/10 text-indigo-400">
-            <Receipt className="w-5 h-5" />
-          </div>
         </div>
         <div className="mt-3">
-          <h3 className="text-2xl sm:text-3xl font-bold tracking-tight text-white">
-            {summary.transactionsCount}
-          </h3>
-          <div className="flex items-center gap-1.5 mt-1.5 text-xs text-slate-400">
-            <span className="text-indigo-400 font-medium">4 bancos</span>
-            <span>sincronizados</span>
+          <div className="font-pixel text-xl sm:text-2xl text-white pixel-text-shadow tracking-tight">
+            {totalTransactions}
+          </div>
+          <div className="mt-2.5 flex items-center space-x-2 font-vt text-base">
+            <span className="text-[#d65dff] font-bold">4 BANCOS RD</span>
+            <span className="text-slate-400">EN LA PARTY</span>
           </div>
         </div>
       </div>
-
-    </div>
+    </section>
   );
 };

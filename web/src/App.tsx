@@ -1,9 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { Navbar } from './components/Navbar';
 import { SummaryCards } from './components/SummaryCards';
 import { CategoryPieChart } from './components/CategoryPieChart';
 import { MonthlyTrendChart } from './components/MonthlyTrendChart';
-import { BankDistribution } from './components/BankDistribution';
 import { TransactionList } from './components/TransactionList';
 import { AddTransactionModal } from './components/AddTransactionModal';
 import { BankConnectionModal } from './components/BankConnectionModal';
@@ -11,7 +10,6 @@ import { StatementSyncModal } from './components/StatementSyncModal';
 import { BankFilterBar } from './components/BankFilterBar';
 import { ApiClient } from './api/client';
 import { AnalyticsSummary, Transaction, Category } from './types';
-import { Sparkles, CheckCircle2, AlertCircle } from 'lucide-react';
 
 export function App() {
   const [summary, setSummary] = useState<AnalyticsSummary | null>(null);
@@ -30,7 +28,7 @@ export function App() {
     setNotification({ type, message });
     setTimeout(() => {
       setNotification(null);
-    }, 4000);
+    }, 4500);
   };
 
   const loadData = async (banksToFilter = selectedBanks) => {
@@ -93,7 +91,7 @@ export function App() {
     if (selectedBanks.includes(bankCode)) {
       nextBanks = selectedBanks.filter(b => b !== bankCode);
     } else {
-      nextBanks = [bankCode]; // Single or switch bank
+      nextBanks = [bankCode];
     }
     setSelectedBanks(nextBanks);
   };
@@ -118,7 +116,7 @@ export function App() {
           showToast('error', (res as any).error || 'Error al sincronizar con Gmail');
         }
       } else {
-        showToast('error', 'Gmail no está vinculado aún. Puedes subir tu Estado de Cuenta o conectar Gmail en "Bancos RD".');
+        showToast('error', 'Gmail no está vinculado aún. Conecta Gmail en "Bancos RD" o sube tu Estado de Cuenta.');
       }
       await loadData(selectedBanks);
     } catch {
@@ -131,7 +129,7 @@ export function App() {
   const handleCreateTransaction = async (data: any) => {
     try {
       await ApiClient.createTransaction(data);
-      showToast('success', 'Movimiento registrado correctamente');
+      showToast('success', 'Movimiento registrado correctamente.');
       await loadData(selectedBanks);
     } catch {
       showToast('error', 'Error al crear la transacción');
@@ -159,130 +157,114 @@ export function App() {
     }
   };
 
-  const handleReset = async () => {
-    if (!window.confirm('¿Deseas eliminar todos los datos y dejar la cuenta en limpio?')) return;
-    try {
-      await ApiClient.resetData();
-      showToast('success', 'Todos los movimientos han sido eliminados.');
-      await loadData(selectedBanks);
-    } catch {
-      showToast('error', 'Error al reiniciar datos');
-    }
-  };
-
   return (
-    <div className="min-h-screen bg-slate-950 flex flex-col selection:bg-emerald-500 selection:text-white pb-16">
-      
-      {/* Toast Notification */}
+    <div className="relative min-h-screen">
+      {/* Retro CRT Overlays */}
+      <div className="crt-scanlines"></div>
+      <div className="crt-vignette"></div>
+
+      {/* Ambient Retro Glows */}
+      <div className="fixed top-0 left-1/4 w-[400px] h-[300px] bg-arcade-purple/10 rounded-full blur-[120px] pointer-events-none"></div>
+      <div className="fixed bottom-0 right-1/4 w-[400px] h-[300px] bg-arcade-blue/10 rounded-full blur-[120px] pointer-events-none"></div>
+
+      {/* Retro Toast Notification */}
       {notification && (
-        <div className="fixed top-20 right-4 z-50 animate-bounce-in max-w-md">
-          <div className={`p-4 rounded-2xl shadow-2xl border flex items-center gap-3 backdrop-blur-xl ${
-            notification.type === 'success' 
-              ? 'bg-emerald-950/90 text-emerald-200 border-emerald-800' 
-              : 'bg-rose-950/90 text-rose-200 border-rose-800'
+        <div className="fixed top-6 right-6 z-50 animate-bounce-in max-w-md">
+          <div className={`p-4 border-2 shadow-[4px_4px_0px_#000] font-pixel text-[9px] flex items-center gap-3 ${
+            notification.type === 'success'
+              ? 'bg-[#092015] text-[#39ff14] border-[#39ff14]'
+              : 'bg-[#2b0b14] text-[#ff3344] border-[#ff3344]'
           }`}>
-            {notification.type === 'success' ? (
-              <CheckCircle2 className="w-5 h-5 text-emerald-400 flex-shrink-0" />
-            ) : (
-              <AlertCircle className="w-5 h-5 text-rose-400 flex-shrink-0" />
-            )}
-            <p className="text-xs font-semibold">{notification.message}</p>
+            <span>{notification.type === 'success' ? '★' : '⚠️'}</span>
+            <p className="leading-relaxed">{notification.message}</p>
           </div>
         </div>
       )}
 
-      {/* Top Navigation */}
-      <Navbar
-        onSync={handleSync}
-        isSyncing={isSyncing}
-        onOpenAddModal={(type = 'EXPENSE') => {
-          setAddModalType(type);
-          setIsAddModalOpen(true);
-        }}
-        onOpenBanksModal={() => setIsBanksModalOpen(true)}
-        onOpenStatementModal={() => setIsStatementModalOpen(true)}
-        onReset={handleReset}
-        isGmailConnected={isGmailConnected}
-      />
+      {/* Main App Container */}
+      <div className="relative z-10 max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 pt-4 pb-12">
+        {/* Top Arcade Status Banner & Header */}
+        <Navbar
+          onSync={handleSync}
+          isSyncing={isSyncing}
+          onOpenAddModal={(type = 'EXPENSE') => {
+            setAddModalType(type);
+            setIsAddModalOpen(true);
+          }}
+          onOpenBanksModal={() => setIsBanksModalOpen(true)}
+          onOpenStatementModal={() => setIsStatementModalOpen(true)}
+          isGmailConnected={isGmailConnected}
+        />
 
-      {/* Main Container */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-8 space-y-6 flex-1 w-full">
-        
-        {/* Welcome Banner */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-gradient-to-r from-emerald-950/50 via-slate-900 to-indigo-950/40 p-6 rounded-3xl border border-emerald-900/30">
-          <div>
-            <div className="flex items-center gap-2 mb-1">
-              <span className="p-1 rounded-md bg-emerald-500/20 text-emerald-400">
-                <Sparkles className="w-4 h-4" />
-              </span>
-              <span className="text-xs font-bold text-emerald-400 uppercase tracking-widest">
-                Automatización Bancaria RD
-              </span>
+        {/* Quest / Stage Dialogue Banner */}
+        <section className="retro-box-gold p-4 sm:p-5 mb-6" data-purpose="hero-banner">
+          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-5">
+            <div>
+              <div className="inline-flex items-center space-x-2 bg-black border border-arcade-green px-2.5 py-1 mb-2 font-pixel text-[9px] text-arcade-green shadow-[2px_2px_0px_#000]">
+                <span className="animate-retro-blink font-bold">★</span>
+                <span>STAGE 01: AUTOMATIZACIÓN BANCARIA RD</span>
+              </div>
+              <h2 className="text-base sm:text-xl font-pixel text-white leading-relaxed pixel-text-shadow">
+                CONTROL DE GASTOS & NOTIFICACIONES
+              </h2>
+              <p className="font-vt text-lg text-amber-200 mt-1 tracking-wider">
+                &gt; PROCESAMIENTO AUTOMÁTICO: <span className="text-arcade-cyan font-bold">PROMERICA, POPULAR, BHD Y QIK</span> CON INTELIGENCIA ARTIFICIAL.
+              </p>
             </div>
-            <h1 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">
-              Control de Gastos & Notificaciones de Bancos
-            </h1>
-            <p className="text-xs sm:text-sm text-slate-300 mt-1 max-w-2xl">
-              Procesamiento automático de avisos de <strong>Banco Promerica, Popular, BHD y Qik</strong> con categorización inteligente.
-            </p>
-          </div>
 
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setIsStatementModalOpen(true)}
-              className="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-cyan-300 border border-slate-700 text-xs font-bold transition-all flex items-center gap-1.5"
-            >
-              <span>📑 Estado de Cuenta</span>
-            </button>
-            <button
-              onClick={() => setIsBanksModalOpen(true)}
-              className="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-bold transition-all"
-            >
-              Configurar Bancos
-            </button>
-            <button
-              onClick={handleSync}
-              disabled={isSyncing}
-              className="px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs shadow-lg shadow-emerald-900/40 transition-all flex items-center gap-1.5"
-            >
-              <span>{isSyncing ? 'Sincronizando...' : 'Escanear Correos'}</span>
-            </button>
+            {/* Stage Options / Quests */}
+            <div className="flex flex-wrap items-center gap-2.5">
+              <button
+                onClick={() => setIsStatementModalOpen(true)}
+                className="pixel-btn pixel-btn-dark"
+              >
+                <span>📜 ESTADO DE CUENTA</span>
+              </button>
+              <button
+                onClick={() => setIsBanksModalOpen(true)}
+                className="pixel-btn pixel-btn-dark"
+              >
+                <span>⚙ BANCOS RD</span>
+              </button>
+              <button
+                onClick={handleSync}
+                disabled={isSyncing}
+                className="pixel-btn pixel-btn-primary"
+              >
+                <span>✉ {isSyncing ? 'ESCANEANDO...' : 'ESCANEAR CORREOS'}</span>
+              </button>
+            </div>
           </div>
-        </div>
+        </section>
 
-        {/* Global Bank Filter Bar */}
+        {/* Bank Filter Bar */}
         <BankFilterBar
           selectedBanks={selectedBanks}
           onToggleBank={handleToggleBank}
           onSelectAll={handleSelectAllBanks}
         />
 
-        {/* KPI Financial Cards (Filtered by Selected Banks) */}
+        {/* Financial KPI Summary (Arcade Player HUD / Scoreboard) */}
         <SummaryCards summary={summary} loading={loading} />
 
-        {/* Analytics & Charts Grid (Filtered by Selected Banks) */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-          
-          {/* Category Breakdown (7 cols) */}
+        {/* Gamified Visualizations Grid */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+          {/* Left: Category Inventory & Radar Breakdown */}
           <div className="lg:col-span-7">
             <CategoryPieChart categories={summary?.categories || []} />
           </div>
 
-          {/* Monthly Trend (5 cols) */}
+          {/* Right: Income vs Expenses Power Meters */}
           <div className="lg:col-span-5">
-            <MonthlyTrendChart data={summary?.monthlyTrend || []} />
+            <MonthlyTrendChart
+              data={summary?.monthlyTrend || []}
+              totalIncome={summary?.totalIncome || 0}
+              totalExpenses={summary?.totalExpenses || 0}
+            />
           </div>
-
         </div>
 
-        {/* Bank Institutions (Clickable to Filter) */}
-        <BankDistribution
-          banks={summary?.byBank || []}
-          selectedBanks={selectedBanks}
-          onSelectBank={handleToggleBank}
-        />
-
-        {/* Transaction History & Live Table (Filtered by Selected Banks) */}
+        {/* Transactions Quest Log */}
         <TransactionList
           transactions={transactions}
           onUpdateCategory={handleUpdateCategory}
@@ -290,7 +272,15 @@ export function App() {
           loading={loading}
         />
 
-      </main>
+        {/* Arcade Page Footer */}
+        <footer className="mt-8 text-center" data-purpose="page-footer">
+          <div className="inline-flex items-center space-x-2.5 bg-[#060b18] border-2 border-[#ffcc00] px-5 py-2.5 font-pixel text-[8px] text-slate-200 shadow-[4px_4px_0px_#000]">
+            <span className="text-[#ffcc00]">🕹️</span>
+            <span className="tracking-wider">GASTABIEN RD • 16-BIT RETRO GAMING HUD • DOMINICAN REPUBLIC FINANCIAL ENGINE</span>
+            <span className="text-[#39ff14] animate-retro-blink">●</span>
+          </div>
+        </footer>
+      </div>
 
       {/* Modals */}
       <AddTransactionModal
@@ -310,19 +300,10 @@ export function App() {
       <StatementSyncModal
         isOpen={isStatementModalOpen}
         onClose={() => setIsStatementModalOpen(false)}
-        onSuccess={() => {
-          showToast('success', '¡Estado de cuenta procesado y balances actualizados!');
-          loadData(selectedBanks);
-        }}
-        defaultBank={(selectedBanks.length === 1 && selectedBanks[0] !== 'ALL') ? (selectedBanks[0] as any) : 'PROMERICA'}
+        onSuccess={() => loadData(selectedBanks)}
       />
-
-      {/* Footer */}
-      <footer className="mt-16 border-t border-slate-900 pt-8 text-center text-xs text-slate-500">
-        <p>GastaBien RD • Sincronización Automática con Gmail y Bancos Dominicanos</p>
-      </footer>
-
     </div>
   );
 }
+
 export default App;
