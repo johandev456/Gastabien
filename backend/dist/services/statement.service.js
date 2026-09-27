@@ -280,8 +280,10 @@ class StatementService {
                 if (headerColIdx.withdrawals !== undefined || headerColIdx.deposits !== undefined) {
                     const wStr = headerColIdx.withdrawals !== undefined ? cols[headerColIdx.withdrawals] : '0';
                     const dStr = headerColIdx.deposits !== undefined ? cols[headerColIdx.deposits] : '0';
+                    const bStr = headerColIdx.balance !== undefined ? cols[headerColIdx.balance] : '0';
                     const wVal = Math.abs(parseFloat(wStr.replace(/[^\d.-]/g, '')) || 0);
                     const dVal = Math.abs(parseFloat(dStr.replace(/[^\d.-]/g, '')) || 0);
+                    const bVal = Math.abs(parseFloat(bStr.replace(/[^\d.-]/g, '')) || 0);
                     if (dVal > 0) {
                         type = 'INCOME';
                         amount = dVal;
@@ -289,6 +291,10 @@ class StatementService {
                     else if (wVal > 0) {
                         type = 'EXPENSE';
                         amount = wVal;
+                    }
+                    else if (bVal > 0 && /balance\s*anterior|saldo\s*anterior|saldo\s*inicial|balance\s*inicial|saldo\s*al|balance\s*al|apertura|deposito|abono|nomina|sueldo/i.test(rawDesc)) {
+                        type = 'INCOME';
+                        amount = bVal;
                     }
                     else {
                         continue; // Skip 0 rows
@@ -384,6 +390,25 @@ class StatementService {
                 currency,
                 type
             });
+        }
+        // Safety fallback: If statement contained an initial balance / previous saldo in the header but no deposit rows:
+        const hasIncome = entries.some(e => e.type === 'INCOME');
+        if (!hasIncome) {
+            const initialMatch = text.match(/(?:saldo\s*inicial|balance\s*inicial|saldo\s*anterior|balance\s*anterior|total\s*(?:cr[eé]ditos|dep[oó]sitos|abonos))\s*:?,?\s*(?:RD\$|\$)?\s*([0-9]{1,3}(?:,[0-9]{3})*(?:\.[0-9]{2})|[0-9]+(?:\.[0-9]{2}))/i);
+            if (initialMatch) {
+                const amt = parseFloat(initialMatch[1].replace(/,/g, ''));
+                if (amt > 0) {
+                    const earliestDate = entries.length > 0 ? entries[entries.length - 1].date : new Date().toISOString().substring(0, 10);
+                    entries.unshift({
+                        date: earliestDate,
+                        rawDate: earliestDate,
+                        description: 'Saldo Inicial / Balance Anterior',
+                        amount: Math.round(amt * 100) / 100,
+                        currency: 'DOP',
+                        type: 'INCOME'
+                    });
+                }
+            }
         }
         return entries;
     }
