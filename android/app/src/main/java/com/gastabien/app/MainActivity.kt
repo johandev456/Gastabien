@@ -43,6 +43,7 @@ class MainActivity : ComponentActivity() {
                 val summaryState by viewModel.summaryState.collectAsState()
                 val transactionsState by viewModel.transactionsState.collectAsState()
                 val selectedBank by viewModel.selectedBank.collectAsState()
+                val selectedCategory by viewModel.selectedCategory.collectAsState()
                 val isSyncing by viewModel.isSyncing.collectAsState()
                 val syncMessage by viewModel.syncMessage.collectAsState()
 
@@ -113,6 +114,8 @@ class MainActivity : ComponentActivity() {
                                 summaryState = summaryState,
                                 selectedBank = selectedBank,
                                 onSelectBank = { viewModel.selectBank(it) },
+                                selectedCategory = selectedCategory,
+                                onSelectCategory = { viewModel.selectCategory(it) },
                                 isSyncing = isSyncing,
                                 onSyncClick = { viewModel.syncEmails() },
                                 onStatementClick = { showStatementDialog = true },
@@ -124,6 +127,8 @@ class MainActivity : ComponentActivity() {
                                 transactionsState = transactionsState,
                                 selectedBank = selectedBank,
                                 onSelectBank = { viewModel.selectBank(it) },
+                                selectedCategory = selectedCategory,
+                                onSelectCategory = { viewModel.selectCategory(it) },
                                 onDeleteClick = { id -> viewModel.deleteTransaction(id) },
                                 onCategoryChange = { id, cat -> viewModel.updateCategory(id, cat) },
                                 onSearchChange = { query -> viewModel.loadTransactions(search = query) }
@@ -133,7 +138,9 @@ class MainActivity : ComponentActivity() {
                             CategoriesScreen(
                                 summaryState = summaryState,
                                 selectedBank = selectedBank,
-                                onSelectBank = { viewModel.selectBank(it) }
+                                onSelectBank = { viewModel.selectBank(it) },
+                                selectedCategory = selectedCategory,
+                                onSelectCategory = { viewModel.selectCategory(it) }
                             )
                         }
                         composable(BottomNavItem.Banks.route) {

@@ -1,13 +1,16 @@
 package com.gastabien.app.ui.screens
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -29,7 +32,9 @@ import java.util.Locale
 fun CategoriesScreen(
     summaryState: UiState<AnalyticsSummary>,
     selectedBank: String,
-    onSelectBank: (String) -> Unit
+    onSelectBank: (String) -> Unit,
+    selectedCategory: String? = null,
+    onSelectCategory: (String?) -> Unit
 ) {
     val dopFormat = NumberFormat.getCurrencyInstance(Locale("es", "DO"))
 
@@ -39,7 +44,7 @@ fun CategoriesScreen(
                 title = {
                     Column {
                         Text(
-                            text = "Categorías",
+                            text = "Categorías de Gasto",
                             fontWeight = FontWeight.Bold,
                             fontSize = 20.sp,
                             color = OnSurface
@@ -68,7 +73,17 @@ fun CategoriesScreen(
                 }
             }
             is UiState.Success -> {
-                val categories = summaryState.data.categories
+                val summary = summaryState.data
+                val categories = summary.categories
+                val isCategoryActive = !selectedCategory.isNullOrBlank() && selectedCategory != "ALL"
+
+                val categoryTransactions = if (isCategoryActive) {
+                    summary.recentTransactions
+                        .filter { it.category.equals(selectedCategory, ignoreCase = true) && it.type == "EXPENSE" }
+                        .sortedByDescending { it.amount }
+                } else {
+                    emptyList()
+                }
 
                 LazyColumn(
                     modifier = Modifier
@@ -83,6 +98,17 @@ fun CategoriesScreen(
                             onSelectBank = onSelectBank,
                             modifier = Modifier.padding(top = 4.dp, bottom = 4.dp)
                         )
+                    }
+
+                    if (isCategoryActive) {
+                        item {
+                            TopCategoryComparisonCard(
+                                categoryName = selectedCategory ?: "",
+                                transactions = categoryTransactions,
+                                dopFormat = dopFormat,
+                                onClearFilter = { onSelectCategory(null) }
+                            )
+                        }
                     }
 
                     if (categories.isEmpty()) {
@@ -104,12 +130,21 @@ fun CategoriesScreen(
                     } else {
                         items(categories) { cat ->
                             val theme = getCategoryTheme(cat.category)
+                            val isSelected = selectedCategory.equals(cat.category, ignoreCase = true)
 
                             Surface(
                                 shape = RoundedCornerShape(18.dp),
-                                color = SurfaceContainerLow.copy(alpha = 0.85f),
-                                border = androidx.compose.foundation.BorderStroke(1.dp, OutlineVariant.copy(alpha = 0.25f)),
-                                modifier = Modifier.fillMaxWidth()
+                                color = if (isSelected) SurfaceContainerHigh else SurfaceContainerLow.copy(alpha = 0.85f),
+                                border = androidx.compose.foundation.BorderStroke(
+                                    1.dp,
+                                    if (isSelected) theme.color else OutlineVariant.copy(alpha = 0.25f)
+                                ),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(18.dp))
+                                    .clickable {
+                                        onSelectCategory(if (isSelected) null else cat.category)
+                                    }
                             ) {
                                 Box {
                                     // Specular line
@@ -149,12 +184,29 @@ fun CategoriesScreen(
                                                     )
                                                 }
 
-                                                Text(
-                                                    text = cat.category,
-                                                    fontSize = 15.sp,
-                                                    fontWeight = FontWeight.Bold,
-                                                    color = OnSurface
-                                                )
+                                                Column {
+                                                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                                        Text(
+                                                            text = cat.category,
+                                                            fontSize = 15.sp,
+                                                            fontWeight = FontWeight.Bold,
+                                                            color = if (isSelected) theme.color else OnSurface
+                                                        )
+                                                        if (isSelected) {
+                                                            Text(
+                                                                text = "Activo",
+                                                                fontSize = 10.sp,
+                                                                fontWeight = FontWeight.Bold,
+                                                                color = theme.color
+                                                            )
+                                                        }
+                                                    }
+                                                    Text(
+                                                        text = "Toca para comparar sus mayores gastos",
+                                                        fontSize = 10.sp,
+                                                        color = OnSurfaceVariant
+                                                    )
+                                                }
                                             }
 
                                             Text(

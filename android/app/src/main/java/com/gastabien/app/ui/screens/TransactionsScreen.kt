@@ -1,6 +1,7 @@
 package com.gastabien.app.ui.screens
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -30,6 +31,8 @@ fun TransactionsScreen(
     transactionsState: UiState<List<Transaction>>,
     selectedBank: String,
     onSelectBank: (String) -> Unit,
+    selectedCategory: String? = null,
+    onSelectCategory: (String?) -> Unit,
     onDeleteClick: (String) -> Unit,
     onCategoryChange: (String, String) -> Unit,
     onSearchChange: (String) -> Unit
@@ -37,6 +40,7 @@ fun TransactionsScreen(
     val dopFormat = NumberFormat.getCurrencyInstance(Locale("es", "DO"))
     var searchText by remember { mutableStateOf("") }
     var itemToDelete by remember { mutableStateOf<String?>(null) }
+    val isCategoryActive = !selectedCategory.isNullOrBlank() && selectedCategory != "ALL"
 
     Scaffold(
         topBar = {
@@ -123,8 +127,40 @@ fun TransactionsScreen(
             BankFilterChips(
                 selectedBank = selectedBank,
                 onSelectBank = onSelectBank,
-                modifier = Modifier.padding(bottom = 12.dp)
+                modifier = Modifier.padding(bottom = 8.dp)
             )
+
+            // Category active filter indicator
+            if (isCategoryActive) {
+                Surface(
+                    shape = RoundedCornerShape(10.dp),
+                    color = Primary.copy(alpha = 0.16f),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, Primary.copy(alpha = 0.35f)),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 10.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text(
+                            text = "Filtrando por categoría: $selectedCategory",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Primary
+                        )
+                        Text(
+                            text = "✕ Quitar",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Primary,
+                            modifier = Modifier.clickable { onSelectCategory(null) }
+                        )
+                    }
+                }
+            }
 
             when (transactionsState) {
                 is UiState.Loading -> {
@@ -139,7 +175,9 @@ fun TransactionsScreen(
                 }
                 is UiState.Success -> {
                     val list = transactionsState.data.filter {
-                        selectedBank.equals("ALL", ignoreCase = true) || it.bank.equals(selectedBank, ignoreCase = true)
+                        val matchesBank = selectedBank.equals("ALL", ignoreCase = true) || it.bank.equals(selectedBank, ignoreCase = true)
+                        val matchesCategory = !isCategoryActive || it.category.equals(selectedCategory, ignoreCase = true)
+                        matchesBank && matchesCategory
                     }
 
                     if (list.isEmpty()) {
@@ -156,6 +194,12 @@ fun TransactionsScreen(
                                 )
                                 Spacer(modifier = Modifier.height(10.dp))
                                 Text("No se encontraron movimientos", color = OnSurfaceVariant, fontSize = 14.sp)
+                                if (isCategoryActive) {
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    TextButton(onClick = { onSelectCategory(null) }) {
+                                        Text("Ver todas las categorías", color = Primary, fontSize = 12.sp)
+                                    }
+                                }
                             }
                         }
                     } else {

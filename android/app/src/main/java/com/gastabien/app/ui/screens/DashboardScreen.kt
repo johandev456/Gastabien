@@ -1,17 +1,22 @@
 package com.gastabien.app.ui.screens
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -36,12 +41,15 @@ fun DashboardScreen(
     summaryState: UiState<AnalyticsSummary>,
     selectedBank: String,
     onSelectBank: (String) -> Unit,
+    selectedCategory: String? = null,
+    onSelectCategory: (String?) -> Unit,
     isSyncing: Boolean,
     onSyncClick: () -> Unit,
     onStatementClick: () -> Unit,
     onAddClick: () -> Unit
 ) {
     val dopFormat = NumberFormat.getCurrencyInstance(Locale("es", "DO"))
+    var dropdownExpanded by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
@@ -193,6 +201,23 @@ fun DashboardScreen(
             }
             is UiState.Success -> {
                 val summary = summaryState.data
+                val isCategoryActive = !selectedCategory.isNullOrBlank() && selectedCategory != "ALL"
+
+                // Filter transactions by selected category if active
+                val filteredTransactions = if (isCategoryActive) {
+                    summary.recentTransactions.filter { it.category.equals(selectedCategory, ignoreCase = true) }
+                } else {
+                    summary.recentTransactions
+                }
+
+                // Category largest transactions
+                val categoryTransactions = if (isCategoryActive) {
+                    summary.recentTransactions
+                        .filter { it.category.equals(selectedCategory, ignoreCase = true) && it.type == "EXPENSE" }
+                        .sortedByDescending { it.amount }
+                } else {
+                    emptyList()
+                }
 
                 LazyColumn(
                     modifier = Modifier
@@ -220,58 +245,205 @@ fun DashboardScreen(
                         BentoKpiGrid(summary, dopFormat)
                     }
 
-                    // Categories Header
+                    // Category Selector Bar with Dropdown & Pills (Mobile First)
                     item {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(top = 6.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Column {
-                                Text(
-                                    text = "Gastos por Categoría",
-                                    fontSize = 17.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = OnSurface
-                                )
-                                Text(
-                                    text = "Clasificación automática RD",
-                                    fontSize = 12.sp,
-                                    color = OnSurfaceVariant
-                                )
-                            }
-                            Surface(
-                                shape = RoundedCornerShape(20.dp),
-                                color = SurfaceContainerHigh,
-                                border = androidx.compose.foundation.BorderStroke(1.dp, OutlineVariant.copy(alpha = 0.25f))
+                        Column(modifier = Modifier.padding(top = 4.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Text(
-                                    text = "Septiembre",
-                                    color = Primary,
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.SemiBold,
-                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
-                                )
+                                Column {
+                                    Text(
+                                        text = if (isCategoryActive) "Top Gastos: $selectedCategory" else "Gastos por Categoría",
+                                        fontSize = 17.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = OnSurface
+                                    )
+                                    Text(
+                                        text = if (isCategoryActive) "Comparativa de mayores desembolsos" else "Toca una categoría para ver sus gastos",
+                                        fontSize = 11.sp,
+                                        color = OnSurfaceVariant
+                                    )
+                                }
+
+                                // Mobile Dropdown Menu Button
+                                Box {
+                                    Surface(
+                                        shape = RoundedCornerShape(12.dp),
+                                        color = SurfaceContainerHigh,
+                                        border = androidx.compose.foundation.BorderStroke(1.dp, OutlineVariant.copy(alpha = 0.3f)),
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(12.dp))
+                                            .clickable { dropdownExpanded = !dropdownExpanded }
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                        ) {
+                                            Text(
+                                                text = if (isCategoryActive) (selectedCategory ?: "Categoría") else "Elegir",
+                                                fontSize = 11.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = if (isCategoryActive) Primary else OnSurface
+                                            )
+                                            Icon(
+                                                Icons.Default.ArrowDropDown,
+                                                contentDescription = "Dropdown",
+                                                tint = if (isCategoryActive) Primary else OnSurfaceVariant,
+                                                modifier = Modifier.size(16.dp)
+                                            )
+                                        }
+                                    }
+
+                                    DropdownMenu(
+                                        expanded = dropdownExpanded,
+                                        onDismissRequest = { dropdownExpanded = false },
+                                        modifier = Modifier.background(SurfaceContainerHigh)
+                                    ) {
+                                        DropdownMenuItem(
+                                            text = {
+                                                Text("✨ Todas las Categorías", color = OnSurface, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                                            },
+                                            onClick = {
+                                                onSelectCategory(null)
+                                                dropdownExpanded = false
+                                            }
+                                        )
+                                        summary.categories.forEach { cat ->
+                                            val catTheme = getCategoryTheme(cat.category)
+                                            DropdownMenuItem(
+                                                leadingIcon = {
+                                                    Icon(catTheme.icon, contentDescription = null, tint = catTheme.color, modifier = Modifier.size(16.dp))
+                                                },
+                                                text = {
+                                                    Row(
+                                                        modifier = Modifier.fillMaxWidth(),
+                                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                                        verticalAlignment = Alignment.CenterVertically
+                                                    ) {
+                                                        Text(cat.category, color = OnSurface, fontSize = 12.sp, fontWeight = FontWeight.Medium)
+                                                        Spacer(modifier = Modifier.width(8.dp))
+                                                        Text(dopFormat.format(cat.total), color = catTheme.color, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                                    }
+                                                },
+                                                onClick = {
+                                                    onSelectCategory(cat.category)
+                                                    dropdownExpanded = false
+                                                }
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+
+                            // Horizontal Category Quick-Chips (Mobile swipeable pills)
+                            val catScrollState = rememberScrollState()
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .horizontalScroll(catScrollState)
+                                    .padding(vertical = 8.dp),
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                // "Todas" chip
+                                Surface(
+                                    shape = RoundedCornerShape(10.dp),
+                                    color = if (!isCategoryActive) Primary.copy(alpha = 0.16f) else SurfaceContainerLow,
+                                    border = androidx.compose.foundation.BorderStroke(
+                                        1.dp,
+                                        if (!isCategoryActive) Primary else OutlineVariant.copy(alpha = 0.3f)
+                                    ),
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(10.dp))
+                                        .clickable { onSelectCategory(null) }
+                                ) {
+                                    Text(
+                                        text = "Todas",
+                                        fontSize = 11.sp,
+                                        fontWeight = if (!isCategoryActive) FontWeight.Bold else FontWeight.Medium,
+                                        color = if (!isCategoryActive) Primary else OnSurfaceVariant,
+                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
+                                    )
+                                }
+
+                                summary.categories.forEach { cat ->
+                                    val isSelected = selectedCategory.equals(cat.category, ignoreCase = true)
+                                    val catTheme = getCategoryTheme(cat.category)
+
+                                    Surface(
+                                        shape = RoundedCornerShape(10.dp),
+                                        color = if (isSelected) catTheme.color.copy(alpha = 0.18f) else SurfaceContainerLow,
+                                        border = androidx.compose.foundation.BorderStroke(
+                                            1.dp,
+                                            if (isSelected) catTheme.color else OutlineVariant.copy(alpha = 0.3f)
+                                        ),
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(10.dp))
+                                            .clickable {
+                                                onSelectCategory(if (isSelected) null else cat.category)
+                                            }
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.padding(horizontal = 9.dp, vertical = 5.dp),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(5.dp)
+                                        ) {
+                                            Icon(
+                                                catTheme.icon,
+                                                contentDescription = null,
+                                                tint = if (isSelected) catTheme.color else OnSurfaceVariant,
+                                                modifier = Modifier.size(12.dp)
+                                            )
+                                            Text(
+                                                text = cat.category,
+                                                fontSize = 11.sp,
+                                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                                color = if (isSelected) OnSurface else OnSurfaceVariant
+                                            )
+                                        }
+                                    }
+                                }
                             }
                         }
                     }
 
-                    if (summary.categories.isEmpty()) {
+                    // When a category is active: show the Top Transactions Comparison Bar Card
+                    if (isCategoryActive) {
                         item {
-                            GlassCard(modifier = Modifier.fillMaxWidth()) {
-                                Text(
-                                    text = "Sin categorías registradas en este período. Sube tu estado de cuenta para visualizar el desglose inteligente.",
-                                    fontSize = 12.sp,
-                                    color = OnSurfaceVariant,
-                                    modifier = Modifier.padding(18.dp)
-                                )
-                            }
+                            TopCategoryComparisonCard(
+                                categoryName = selectedCategory ?: "",
+                                transactions = categoryTransactions,
+                                dopFormat = dopFormat,
+                                onClearFilter = { onSelectCategory(null) }
+                            )
                         }
                     } else {
-                        items(summary.categories.take(5)) { cat ->
-                            CategoryCardItem(cat, dopFormat)
+                        // Regular Category Breakdown List with tap-to-filter
+                        if (summary.categories.isEmpty()) {
+                            item {
+                                GlassCard(modifier = Modifier.fillMaxWidth()) {
+                                    Text(
+                                        text = "Sin categorías registradas en este período. Sube tu estado de cuenta para visualizar el desglose inteligente.",
+                                        fontSize = 12.sp,
+                                        color = OnSurfaceVariant,
+                                        modifier = Modifier.padding(18.dp)
+                                    )
+                                }
+                            }
+                        } else {
+                            items(summary.categories.take(5)) { cat ->
+                                CategoryCardItem(
+                                    cat = cat,
+                                    dopFormat = dopFormat,
+                                    isSelected = selectedCategory.equals(cat.category, ignoreCase = true),
+                                    onClick = {
+                                        onSelectCategory(if (selectedCategory.equals(cat.category, ignoreCase = true)) null else cat.category)
+                                    }
+                                )
+                            }
                         }
                     }
 
@@ -285,14 +457,36 @@ fun DashboardScreen(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Column {
+                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                    Text(
+                                        text = if (isCategoryActive) "Movimientos en $selectedCategory" else "Últimos Movimientos",
+                                        fontSize = 17.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = OnSurface
+                                    )
+                                    if (isCategoryActive) {
+                                        Surface(
+                                            shape = RoundedCornerShape(8.dp),
+                                            color = Primary.copy(alpha = 0.15f),
+                                            modifier = Modifier.clickable { onSelectCategory(null) }
+                                        ) {
+                                            Row(
+                                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.spacedBy(2.dp)
+                                            ) {
+                                                Text(
+                                                    text = "${filteredTransactions.size} movs ✕",
+                                                    fontSize = 10.sp,
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = Primary
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
                                 Text(
-                                    text = "Últimos Movimientos",
-                                    fontSize = 17.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = OnSurface
-                                )
-                                Text(
-                                    text = "Validado contra estados de cuenta",
+                                    text = if (isCategoryActive) "Transacciones filtradas por categoría" else "Validado contra estados de cuenta oficiales",
                                     fontSize = 12.sp,
                                     color = OnSurfaceVariant
                                 )
@@ -300,7 +494,7 @@ fun DashboardScreen(
                         }
                     }
 
-                    if (summary.recentTransactions.isEmpty()) {
+                    if (filteredTransactions.isEmpty()) {
                         item {
                             GlassCard(modifier = Modifier.fillMaxWidth()) {
                                 Column(
@@ -315,22 +509,22 @@ fun DashboardScreen(
                                     )
                                     Spacer(modifier = Modifier.height(8.dp))
                                     Text(
-                                        text = "No hay movimientos registrados",
+                                        text = if (isCategoryActive) "No hay movimientos en $selectedCategory" else "No hay movimientos registrados",
                                         fontWeight = FontWeight.Bold,
                                         color = OnSurface,
                                         fontSize = 14.sp
                                     )
-                                    Spacer(modifier = Modifier.height(4.dp))
-                                    Text(
-                                        text = "Toca el icono 📑 superior para importar tu extracto bancario (.csv).",
-                                        color = OnSurfaceVariant,
-                                        fontSize = 12.sp
-                                    )
+                                    if (isCategoryActive) {
+                                        Spacer(modifier = Modifier.height(4.dp))
+                                        TextButton(onClick = { onSelectCategory(null) }) {
+                                            Text("Ver todas las transacciones", color = Primary, fontSize = 12.sp)
+                                        }
+                                    }
                                 }
                             }
                         }
                     } else {
-                        items(summary.recentTransactions.take(6)) { tx ->
+                        items(filteredTransactions.take(8)) { tx ->
                             RecentTransactionItem(tx, dopFormat)
                         }
                     }
@@ -367,6 +561,184 @@ fun DashboardScreen(
                 }
             }
             else -> {}
+        }
+    }
+}
+
+@Composable
+fun TopCategoryComparisonCard(
+    categoryName: String,
+    transactions: List<Transaction>,
+    dopFormat: NumberFormat,
+    onClearFilter: () -> Unit
+) {
+    val theme = getCategoryTheme(categoryName)
+    val totalAmount = transactions.sumOf { it.amount }
+    val maxTxAmount = if (transactions.isNotEmpty()) transactions.maxOf { it.amount } else 1.0
+    val avgAmount = if (transactions.isNotEmpty()) totalAmount / transactions.size else 0.0
+
+    GlassCard(modifier = Modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            // Header
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(36.dp)
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(theme.containerColor),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(theme.icon, contentDescription = null, tint = theme.color, modifier = Modifier.size(20.dp))
+                    }
+                    Column {
+                        Text(
+                            text = categoryName,
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = OnSurface
+                        )
+                        Text(
+                            text = "${transactions.size} gastos • Total ${dopFormat.format(totalAmount)}",
+                            fontSize = 11.sp,
+                            color = theme.color,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+                }
+
+                Surface(
+                    shape = RoundedCornerShape(10.dp),
+                    color = SurfaceContainerHigh,
+                    border = androidx.compose.foundation.BorderStroke(1.dp, OutlineVariant.copy(alpha = 0.3f)),
+                    modifier = Modifier.clickable { onClearFilter() }
+                ) {
+                    Text(
+                        text = "✕ Cerrar",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = OnSurfaceVariant,
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(14.dp))
+
+            // Comparison Bars List
+            if (transactions.isEmpty()) {
+                Text(
+                    text = "No hay gastos registrados en esta categoría.",
+                    fontSize = 12.sp,
+                    color = OnSurfaceVariant,
+                    modifier = Modifier.padding(vertical = 8.dp)
+                )
+            } else {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    transactions.take(4).forEachIndexed { index, tx ->
+                        val ratio = if (maxTxAmount > 0) (tx.amount / maxTxAmount).toFloat().coerceIn(0.1f, 1f) else 0.5f
+
+                        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    Surface(
+                                        shape = RoundedCornerShape(6.dp),
+                                        color = theme.containerColor,
+                                        modifier = Modifier.size(18.dp)
+                                    ) {
+                                        Box(contentAlignment = Alignment.Center) {
+                                            Text(
+                                                text = "#${index + 1}",
+                                                fontSize = 9.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = theme.color
+                                            )
+                                        }
+                                    }
+                                    Text(
+                                        text = tx.merchant,
+                                        fontSize = 13.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = OnSurface,
+                                        maxLines = 1
+                                    )
+                                    Text(
+                                        text = "• ${tx.bankName}",
+                                        fontSize = 10.sp,
+                                        color = OnSurfaceVariant
+                                    )
+                                }
+
+                                Text(
+                                    text = dopFormat.format(tx.amount),
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = theme.color
+                                )
+                            }
+
+                            // Glowing Horizontal Bar
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(6.dp)
+                                    .clip(CircleShape)
+                                    .background(SurfaceContainerHighest)
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth(ratio)
+                                        .fillMaxHeight()
+                                        .clip(CircleShape)
+                                        .background(
+                                            Brush.horizontalGradient(
+                                                listOf(theme.color.copy(alpha = 0.6f), theme.color)
+                                            )
+                                        )
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // Average Callout
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(SurfaceContainerHigh.copy(alpha = 0.6f), RoundedCornerShape(10.dp))
+                    .padding(horizontal = 10.dp, vertical = 8.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "Promedio por desembolso:",
+                    fontSize = 11.sp,
+                    color = OnSurfaceVariant
+                )
+                Text(
+                    text = dopFormat.format(avgAmount),
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = OnSurface
+                )
+            }
         }
     }
 }
@@ -593,10 +965,26 @@ fun BentoMiniCard(
 }
 
 @Composable
-fun CategoryCardItem(cat: CategorySummary, dopFormat: NumberFormat) {
+fun CategoryCardItem(
+    cat: CategorySummary,
+    dopFormat: NumberFormat,
+    isSelected: Boolean = false,
+    onClick: () -> Unit = {}
+) {
     val theme = getCategoryTheme(cat.category)
 
-    GlassCard(modifier = Modifier.fillMaxWidth()) {
+    Surface(
+        shape = RoundedCornerShape(18.dp),
+        color = if (isSelected) SurfaceContainerHigh else SurfaceContainerLow.copy(alpha = 0.85f),
+        border = androidx.compose.foundation.BorderStroke(
+            1.dp,
+            if (isSelected) theme.color else OutlineVariant.copy(alpha = 0.25f)
+        ),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(18.dp))
+            .clickable { onClick() }
+    ) {
         Column(modifier = Modifier.padding(14.dp)) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
@@ -623,14 +1011,24 @@ fun CategoryCardItem(cat: CategorySummary, dopFormat: NumberFormat) {
                     }
 
                     Column {
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Text(
+                                text = cat.category,
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = if (isSelected) theme.color else OnSurface
+                            )
+                            if (isSelected) {
+                                Text(
+                                    text = "✓",
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = theme.color
+                                )
+                            }
+                        }
                         Text(
-                            text = cat.category,
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            color = OnSurface
-                        )
-                        Text(
-                            text = "${cat.count} transacciones",
+                            text = "${cat.count} transacciones (Toca para filtrar)",
                             fontSize = 11.sp,
                             color = OnSurfaceVariant
                         )

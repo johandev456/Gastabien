@@ -31,6 +31,9 @@ class MainViewModel : ViewModel() {
     private val _selectedBank = MutableStateFlow("ALL")
     val selectedBank: StateFlow<String> = _selectedBank.asStateFlow()
 
+    private val _selectedCategory = MutableStateFlow<String?>("ALL")
+    val selectedCategory: StateFlow<String?> = _selectedCategory.asStateFlow()
+
     private var currentSearch: String? = null
 
     private val _isSyncing = MutableStateFlow(false)
@@ -50,6 +53,10 @@ class MainViewModel : ViewModel() {
     fun selectBank(bank: String) {
         _selectedBank.value = bank
         refreshAll()
+    }
+
+    fun selectCategory(category: String?) {
+        _selectedCategory.value = category
     }
 
     fun refreshAll() {
