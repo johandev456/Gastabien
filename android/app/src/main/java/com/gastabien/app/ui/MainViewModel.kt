@@ -2,6 +2,7 @@ package com.gastabien.app.ui
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.gastabien.app.data.api.ApiService
 import com.gastabien.app.data.api.RetrofitClient
 import com.gastabien.app.data.models.*
 import kotlinx.coroutines.flow.MutableStateFlow
