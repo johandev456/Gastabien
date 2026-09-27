@@ -223,38 +223,38 @@ class StatementService {
             const line = rawLines[i];
             const normLine = normalizeStr(line);
             // 1. Detect CSV Header Row
-            const isHeaderRow = ((normLine.includes('fecha') || normLine.includes('posteo') || normLine.includes('date')) &&
-                (normLine.includes('retiro') || normLine.includes('debito') || normLine.includes('deposito') || normLine.includes('credito') || normLine.includes('monto') || normLine.includes('balance') || normLine.includes('saldo') || normLine.includes('concepto') || normLine.includes('descripcion')));
+            const isHeaderRow = ((/\bposteo|\bfecha|\bdate/i.test(normLine)) &&
+                (/\bretir|\bdeb|\bdep|\bcred|\bmonto|\bbalance|\bsaldo|\bconcept|\bdesc/i.test(normLine)));
             if (isHeaderRow) {
                 const cols = this.parseCSVLine(line);
                 headerColIdx = {};
                 cols.forEach((rawCol, idx) => {
                     const c = normalizeStr(rawCol);
-                    if (c.includes('posteo') || (c.includes('fecha') && headerColIdx?.postDate === undefined)) {
+                    if (/\bposteo/i.test(c) || (/\bfecha|\bdate/i.test(c) && headerColIdx.postDate === undefined)) {
                         headerColIdx.postDate = idx;
                     }
-                    else if (c.includes('codigo') || c.includes('txcode')) {
+                    else if (/\bc.*dig|\btxcode/i.test(c)) {
                         headerColIdx.txCode = idx;
                     }
-                    else if (c.includes('referencia') || c.includes('ref') || c.includes('secuencia') || c.includes('documento')) {
+                    else if (/\bref|\bsecuenc|\bdoc/i.test(c)) {
                         headerColIdx.ref = idx;
                     }
-                    else if (c.includes('descripci') || c.includes('concepto') || c.includes('detalle') || c.includes('comercio') || c.includes('beneficiario') || c.includes('transaccion')) {
+                    else if (/\bdesc|\bconcept|\bdetall|\bcomerc|\bbenefic/i.test(c)) {
                         headerColIdx.desc = idx;
                     }
-                    else if (c.includes('retiro') || c.includes('debito') || c.includes('cargo') || c.includes('egreso') || c.includes('salida')) {
+                    else if (/\bretir|\bdeb|\bcarg|\begres|\bsalid|\bgast/i.test(c)) {
                         headerColIdx.withdrawals = idx;
                     }
-                    else if (c.includes('deposito') || c.includes('credito') || c.includes('abono') || c.includes('ingreso') || c.includes('entrada')) {
+                    else if (/\bdep|\bcred|\babon|\bingres|\bentrad|\bcr\b/i.test(c)) {
                         headerColIdx.deposits = idx;
                     }
-                    else if (c === 'tipo' || c.includes('naturaleza')) {
+                    else if (c === 'tipo' || /\bnaturalez/i.test(c)) {
                         headerColIdx.type = idx;
                     }
-                    else if (c.includes('monto') || c.includes('importe') || c.includes('valor') || c.includes('cantidad')) {
+                    else if (/\bmonto|\bimport|\bvalor|\bcantidad/i.test(c)) {
                         headerColIdx.amount = idx;
                     }
-                    else if (c.includes('balance') || c.includes('saldo')) {
+                    else if (/\bbalance|\bsaldo|\bdisponib/i.test(c)) {
                         headerColIdx.balance = idx;
                     }
                 });
