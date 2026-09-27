@@ -23,6 +23,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.gastabien.app.data.models.AnalyticsSummary
@@ -30,6 +31,7 @@ import com.gastabien.app.data.models.CategorySummary
 import com.gastabien.app.data.models.Transaction
 import com.gastabien.app.ui.UiState
 import com.gastabien.app.ui.components.BankFilterChips
+import com.gastabien.app.ui.components.InteractiveDonutChart
 import com.gastabien.app.ui.components.getCategoryTheme
 import com.gastabien.app.ui.theme.*
 import java.text.NumberFormat
@@ -243,6 +245,17 @@ fun DashboardScreen(
                     // Bento 2x2 KPI Mini Cards Grid
                     item {
                         BentoKpiGrid(summary, dopFormat)
+                    }
+
+                    // Interactive Donut Chart Visual Analytics
+                    item {
+                        InteractiveDonutChart(
+                            categories = summary.categories,
+                            totalExpenses = summary.totalExpenses,
+                            selectedCategory = selectedCategory,
+                            onSelectCategory = onSelectCategory,
+                            dopFormat = dopFormat
+                        )
                     }
 
                     // Category Selector Bar with Dropdown & Pills (Mobile First)
@@ -652,6 +665,7 @@ fun TopCategoryComparisonCard(
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Row(
+                                    modifier = Modifier.weight(1f).padding(end = 8.dp),
                                     verticalAlignment = Alignment.CenterVertically,
                                     horizontalArrangement = Arrangement.spacedBy(6.dp)
                                 ) {
@@ -674,12 +688,14 @@ fun TopCategoryComparisonCard(
                                         fontSize = 13.sp,
                                         fontWeight = FontWeight.SemiBold,
                                         color = OnSurface,
-                                        maxLines = 1
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
                                     )
                                     Text(
                                         text = "• ${tx.bankName}",
                                         fontSize = 10.sp,
-                                        color = OnSurfaceVariant
+                                        color = OnSurfaceVariant,
+                                        maxLines = 1
                                     )
                                 }
 
