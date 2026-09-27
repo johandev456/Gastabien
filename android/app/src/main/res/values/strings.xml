@@ -1,0 +1,8 @@
+<resources>
+    <string name="app_name">GastaBien RD</string>
+    <string name="dashboard">Resumen</string>
+    <string name="transactions">Movimientos</string>
+    <string name="categories">Categorías</string>
+    <string name="banks">Bancos</string>
+    <string name="sync_button">Sincronizar</string>
+</resources>
