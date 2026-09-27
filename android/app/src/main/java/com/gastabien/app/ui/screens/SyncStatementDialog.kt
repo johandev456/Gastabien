@@ -166,13 +166,21 @@ fun SyncStatementDialog(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(vertical = 8.dp),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
                     listOf("PROMERICA", "POPULAR", "BHD", "QIK").forEach { b ->
                         FilterChip(
                             selected = bank == b,
                             onClick = { bank = b },
-                            label = { Text(b, fontSize = 10.sp, fontWeight = FontWeight.Bold) },
+                            label = { 
+                                Text(
+                                    text = if (b == "PROMERICA") "Prom." else if (b == "POPULAR") "Pop." else b, 
+                                    fontSize = 10.sp, 
+                                    fontWeight = FontWeight.Bold,
+                                    maxLines = 1
+                                ) 
+                            },
+                            modifier = Modifier.weight(1f),
                             colors = FilterChipDefaults.filterChipColors(
                                 selectedContainerColor = Emerald600,
                                 selectedLabelColor = Color.White,
