@@ -45,6 +45,7 @@ class MainActivity : ComponentActivity() {
                 val navController = rememberNavController()
                 val summaryState by viewModel.summaryState.collectAsState()
                 val transactionsState by viewModel.transactionsState.collectAsState()
+                val selectedBank by viewModel.selectedBank.collectAsState()
                 val isSyncing by viewModel.isSyncing.collectAsState()
                 val syncMessage by viewModel.syncMessage.collectAsState()
 
@@ -113,6 +114,8 @@ class MainActivity : ComponentActivity() {
                         composable(BottomNavItem.Dashboard.route) {
                             DashboardScreen(
                                 summaryState = summaryState,
+                                selectedBank = selectedBank,
+                                onSelectBank = { viewModel.selectBank(it) },
                                 isSyncing = isSyncing,
                                 onSyncClick = { viewModel.syncEmails() },
                                 onStatementClick = { showStatementDialog = true },
@@ -122,6 +125,8 @@ class MainActivity : ComponentActivity() {
                         composable(BottomNavItem.Transactions.route) {
                             TransactionsScreen(
                                 transactionsState = transactionsState,
+                                selectedBank = selectedBank,
+                                onSelectBank = { viewModel.selectBank(it) },
                                 onDeleteClick = { id -> viewModel.deleteTransaction(id) },
                                 onCategoryChange = { id, cat -> viewModel.updateCategory(id, cat) },
                                 onSearchChange = { query -> viewModel.loadTransactions(search = query) }
@@ -129,7 +134,9 @@ class MainActivity : ComponentActivity() {
                         }
                         composable(BottomNavItem.Categories.route) {
                             CategoriesScreen(
-                                summaryState = summaryState
+                                summaryState = summaryState,
+                                selectedBank = selectedBank,
+                                onSelectBank = { viewModel.selectBank(it) }
                             )
                         }
                         composable(BottomNavItem.Banks.route) {

@@ -7,7 +7,8 @@ interface ApiService {
 
     @GET("api/analytics/summary")
     suspend fun getSummary(
-        @Header("x-user-id") userId: String = "demo-user-id"
+        @Header("x-user-id") userId: String = "demo-user-id",
+        @Query("bank") bank: String? = null
     ): AnalyticsSummary
 
     @GET("api/transactions")

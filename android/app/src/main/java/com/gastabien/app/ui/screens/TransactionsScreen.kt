@@ -19,6 +19,7 @@ import androidx.compose.ui.unit.sp
 import com.gastabien.app.data.models.Transaction
 import com.gastabien.app.ui.UiState
 import com.gastabien.app.ui.theme.*
+import com.gastabien.app.ui.components.BankFilterChips
 import java.text.NumberFormat
 import java.util.Locale
 
@@ -26,13 +27,14 @@ import java.util.Locale
 @Composable
 fun TransactionsScreen(
     transactionsState: UiState<List<Transaction>>,
+    selectedBank: String,
+    onSelectBank: (String) -> Unit,
     onDeleteClick: (String) -> Unit,
     onCategoryChange: (String, String) -> Unit,
     onSearchChange: (String) -> Unit
 ) {
     val dopFormat = NumberFormat.getCurrencyInstance(Locale("es", "DO"))
     var searchText by remember { mutableStateOf("") }
-    var selectedBankFilter by remember { mutableStateOf("ALL") }
 
     Scaffold(
         topBar = {
@@ -60,7 +62,7 @@ fun TransactionsScreen(
                 leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, tint = Slate400) },
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(bottom = 12.dp),
+                    .padding(bottom = 8.dp),
                 shape = RoundedCornerShape(12.dp),
                 colors = OutlinedTextFieldDefaults.colors(
                     focusedBorderColor = Emerald400,
@@ -71,6 +73,13 @@ fun TransactionsScreen(
                     unfocusedTextColor = Color.White
                 ),
                 singleLine = true
+            )
+
+            // Bank Filter Chips Bar
+            BankFilterChips(
+                selectedBank = selectedBank,
+                onSelectBank = onSelectBank,
+                modifier = Modifier.padding(bottom = 12.dp)
             )
 
             when (transactionsState) {
@@ -86,7 +95,7 @@ fun TransactionsScreen(
                 }
                 is UiState.Success -> {
                     val list = transactionsState.data.filter {
-                        selectedBankFilter == "ALL" || it.bank == selectedBankFilter
+                        selectedBank.equals("ALL", ignoreCase = true) || it.bank.equals(selectedBank, ignoreCase = true)
                     }
 
                     if (list.isEmpty()) {

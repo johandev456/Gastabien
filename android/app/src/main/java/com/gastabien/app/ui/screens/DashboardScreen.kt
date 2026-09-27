@@ -22,6 +22,8 @@ import com.gastabien.app.data.models.CategorySummary
 import com.gastabien.app.data.models.Transaction
 import com.gastabien.app.ui.UiState
 import com.gastabien.app.ui.theme.*
+import com.gastabien.app.ui.components.BankFilterChips
+import com.gastabien.app.ui.components.DOMINICAN_BANKS
 import java.text.NumberFormat
 import java.util.Locale
 
@@ -29,6 +31,8 @@ import java.util.Locale
 @Composable
 fun DashboardScreen(
     summaryState: UiState<AnalyticsSummary>,
+    selectedBank: String,
+    onSelectBank: (String) -> Unit,
     isSyncing: Boolean,
     onSyncClick: () -> Unit,
     onStatementClick: () -> Unit,
@@ -154,8 +158,17 @@ fun DashboardScreen(
                         .fillMaxSize()
                         .padding(padding)
                         .padding(horizontal = 16.dp),
-                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                    verticalArrangement = Arrangement.spacedBy(14.dp)
                 ) {
+                    // Bank Filter Bar
+                    item {
+                        BankFilterChips(
+                            selectedBank = selectedBank,
+                            onSelectBank = onSelectBank,
+                            modifier = Modifier.padding(top = 4.dp, bottom = 2.dp)
+                        )
+                    }
+
                     // KPI Balance Card
                     item {
                         BalanceCard(summary, dopFormat)

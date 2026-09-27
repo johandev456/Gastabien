@@ -17,13 +17,16 @@ import androidx.compose.ui.unit.sp
 import com.gastabien.app.data.models.AnalyticsSummary
 import com.gastabien.app.ui.UiState
 import com.gastabien.app.ui.theme.*
+import com.gastabien.app.ui.components.BankFilterChips
 import java.text.NumberFormat
 import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CategoriesScreen(
-    summaryState: UiState<AnalyticsSummary>
+    summaryState: UiState<AnalyticsSummary>,
+    selectedBank: String,
+    onSelectBank: (String) -> Unit
 ) {
     val dopFormat = NumberFormat.getCurrencyInstance(Locale("es", "DO"))
 
@@ -57,6 +60,14 @@ fun CategoriesScreen(
                         .padding(horizontal = 16.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
+                    item {
+                        BankFilterChips(
+                            selectedBank = selectedBank,
+                            onSelectBank = onSelectBank,
+                            modifier = Modifier.padding(top = 4.dp, bottom = 4.dp)
+                        )
+                    }
+
                     item {
                         Text(
                             text = "Desglose Automático de Comercios",

@@ -28,6 +28,11 @@ class MainViewModel : ViewModel() {
     private val _transactionsState = MutableStateFlow<UiState<List<Transaction>>>(UiState.Loading)
     val transactionsState: StateFlow<UiState<List<Transaction>>> = _transactionsState.asStateFlow()
 
+    private val _selectedBank = MutableStateFlow("ALL")
+    val selectedBank: StateFlow<String> = _selectedBank.asStateFlow()
+
+    private var currentSearch: String? = null
+
     private val _isSyncing = MutableStateFlow(false)
     val isSyncing: StateFlow<Boolean> = _isSyncing.asStateFlow()
 
@@ -42,16 +47,22 @@ class MainViewModel : ViewModel() {
         _syncMessage.value = null
     }
 
-    fun refreshAll() {
-        loadSummary()
-        loadTransactions()
+    fun selectBank(bank: String) {
+        _selectedBank.value = bank
+        refreshAll()
     }
 
-    fun loadSummary() {
+    fun refreshAll() {
+        val bankParam = if (_selectedBank.value == "ALL") null else _selectedBank.value
+        loadSummary(bank = bankParam)
+        loadTransactions(bank = bankParam, search = currentSearch)
+    }
+
+    fun loadSummary(bank: String? = if (_selectedBank.value == "ALL") null else _selectedBank.value) {
         viewModelScope.launch {
             _summaryState.value = UiState.Loading
             try {
-                val summary = api.getSummary()
+                val summary = api.getSummary(bank = bank)
                 _summaryState.value = UiState.Success(summary)
             } catch (e: Exception) {
                 _summaryState.value = UiState.Error(e.localizedMessage ?: "Error al cargar resumen")
@@ -60,11 +71,12 @@ class MainViewModel : ViewModel() {
     }
 
     fun loadTransactions(
-        bank: String? = null,
+        bank: String? = if (_selectedBank.value == "ALL") null else _selectedBank.value,
         category: String? = null,
         type: String? = null,
-        search: String? = null
+        search: String? = currentSearch
     ) {
+        currentSearch = search
         viewModelScope.launch {
             _transactionsState.value = UiState.Loading
             try {
