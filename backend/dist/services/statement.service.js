@@ -3,11 +3,22 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.statementService = exports.StatementService = void 0;
 const db_1 = require("../database/db");
 const categorization_service_1 = require("./categorization.service");
+function normalizeStr(s) {
+    if (!s)
+        return '';
+    return s
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .trim();
+}
 class StatementService {
     /**
-     * Helper to parse a CSV line accounting for quotes
+     * Helper to parse a CSV line accounting for quotes and delimiters (; or , or \t)
      */
     parseCSVLine(line) {
+        // Detect delimiter: semicolon, tab, or comma
+        const delimiter = line.includes(';') && !line.includes(',') ? ';' : (line.includes('\t') ? '\t' : ',');
         const result = [];
         let current = '';
         let inQuotes = false;
@@ -16,7 +27,7 @@ class StatementService {
             if (char === '"') {
                 inQuotes = !inQuotes;
             }
-            else if (char === ',' && !inQuotes) {
+            else if (char === delimiter && !inQuotes) {
                 result.push(current.trim());
                 current = '';
             }
@@ -25,7 +36,58 @@ class StatementService {
             }
         }
         result.push(current.trim());
-        return result.map(c => c.replace(/^"|"$/g, '').trim());
+        return result.map(c => c.replace(/^["']+|["']+$/g, '').trim());
+    }
+    /**
+     * Universal Date Parser for Dominican statements:
+     * Handles: DD/MM/YYYY, DD-MM-YYYY, YYYY-MM-DD, DD-MMM-YYYY, DD/MM/YY
+     */
+    parseAnyDate(rawDate) {
+        if (!rawDate)
+            return new Date().toISOString().substring(0, 10);
+        const clean = rawDate.trim();
+        // 1. ISO format: YYYY-MM-DD or YYYY/MM/DD
+        const isoMatch = clean.match(/^(\d{4})[\/\-\.](\d{1,2})[\/\-\.](\d{1,2})/);
+        if (isoMatch) {
+            const y = parseInt(isoMatch[1], 10);
+            const m = parseInt(isoMatch[2], 10);
+            const d = parseInt(isoMatch[3], 10);
+            return `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+        }
+        // 2. Month name in Spanish e.g. 25-SEP-2026 or 25/SEPTIEMBRE/2026
+        const spanishMonths = {
+            ene: 1, feb: 2, mar: 3, abr: 4, may: 5, jun: 6,
+            jul: 7, ago: 8, sep: 9, set: 9, oct: 10, nov: 11, dic: 12,
+            enero: 1, febrero: 2, marzo: 3, abril: 4, mayo: 5, junio: 6,
+            julio: 7, agosto: 8, septiembre: 9, setiembre: 9, octubre: 10, noviembre: 11, diciembre: 12
+        };
+        const nameMonthMatch = clean.match(/^(\d{1,2})[\/\-\.\s]+([a-zA-ZáéíóúÁÉÍÓÚ]+)[\/\-\.\s]+(\d{2,4})/i);
+        if (nameMonthMatch) {
+            const d = parseInt(nameMonthMatch[1], 10);
+            const monthKey = normalizeStr(nameMonthMatch[2]).substring(0, 3);
+            const m = spanishMonths[monthKey] || 1;
+            let y = parseInt(nameMonthMatch[3], 10);
+            if (y < 100)
+                y += 2000;
+            return `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+        }
+        // 3. DD/MM/YYYY or DD-MM-YYYY or DD.MM.YYYY
+        const dmyMatch = clean.match(/^(\d{1,2})[\/\-\.](\d{1,2})(?:[\/\-\.](\d{2,4}))?/);
+        if (dmyMatch) {
+            const p1 = parseInt(dmyMatch[1], 10);
+            const p2 = parseInt(dmyMatch[2], 10);
+            let y = dmyMatch[3] ? parseInt(dmyMatch[3], 10) : new Date().getFullYear();
+            if (y < 100)
+                y += 2000;
+            let day = p1;
+            let month = p2;
+            if (p1 <= 12 && p2 > 12) {
+                day = p2;
+                month = p1;
+            }
+            return `${y}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+        }
+        return new Date().toISOString().substring(0, 10);
     }
     /**
      * Cleans and beautifies raw bank descriptions (especially Promerica POS, ATM, DGII, Paydays)
@@ -59,7 +121,7 @@ class StatementService {
             return text;
         }
         // 3. Clean ATM Withdrawals
-        if (txCode === '57-81' || /retiro\s*atm|cajero|dispensaci[oó]n/i.test(text)) {
+        if (/retiro\s*atm|cajero|dispensaci[oó]n|\batm\b/i.test(text) || (txCode === '57-81' && /retiro|cajero|atm/i.test(text))) {
             let atmLoc = text
                 .replace(/^RETIRO\s*ATM\s*/i, '')
                 .replace(/\s*(?:SANTO\s*DOMINGO\s*DO|SANTO\s*DOMINGO\s*DR\s*DO|REPSTDOM\s*DR\s*DO|SANTO\s*DOMINGO|DR\s*DO|DO)$/i, '')
@@ -78,7 +140,7 @@ class StatementService {
             else if (/promerica/i.test(atmLoc)) {
                 atmLoc = 'ATM Banco Promerica';
             }
-            return `Retiro en Cajero (${atmLoc})`;
+            return `Retiro en Cajero (${atmLoc || 'ATM'})`;
         }
         // 4. Clean DGII Tax
         if (txCode === '79-49' || /cobro\s*impuesto\s*cheques/i.test(text)) {
@@ -150,78 +212,120 @@ class StatementService {
         }).join(' ');
     }
     /**
-     * Parses raw statement text / CSV / copied internet banking tables
+     * Robust parser for raw statement text, CSV, and copied online banking tables
      */
     parseStatementText(text, defaultBank = 'PROMERICA') {
         const rawLines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
         const entries = [];
-        // Check if this is a structured CSV with headers
+        // Header column indices
         let headerColIdx = null;
         for (let i = 0; i < rawLines.length; i++) {
             const line = rawLines[i];
-            const lower = line.toLowerCase();
-            // Check header row
-            if ((lower.includes('fecha de posteo') || lower.includes('fecha')) && (lower.includes('retiros') || lower.includes('depósitos') || lower.includes('depositos') || lower.includes('débito') || lower.includes('debito'))) {
+            const normLine = normalizeStr(line);
+            // 1. Detect CSV Header Row
+            const isHeaderRow = ((normLine.includes('fecha') || normLine.includes('posteo') || normLine.includes('date')) &&
+                (normLine.includes('retiro') || normLine.includes('debito') || normLine.includes('deposito') || normLine.includes('credito') || normLine.includes('monto') || normLine.includes('balance') || normLine.includes('saldo') || normLine.includes('concepto') || normLine.includes('descripcion')));
+            if (isHeaderRow) {
                 const cols = this.parseCSVLine(line);
                 headerColIdx = {};
-                cols.forEach((col, idx) => {
-                    const c = col.toLowerCase().trim();
-                    if (c.includes('fecha de posteo') || (c === 'fecha' && headerColIdx?.postDate === undefined))
+                cols.forEach((rawCol, idx) => {
+                    const c = normalizeStr(rawCol);
+                    if (c.includes('posteo') || (c.includes('fecha') && headerColIdx?.postDate === undefined)) {
                         headerColIdx.postDate = idx;
-                    if (c.includes('código') || c.includes('codigo'))
+                    }
+                    else if (c.includes('codigo') || c.includes('txcode')) {
                         headerColIdx.txCode = idx;
-                    if (c.includes('referencia') || c.includes('no. referencia'))
+                    }
+                    else if (c.includes('referencia') || c.includes('ref') || c.includes('secuencia') || c.includes('documento')) {
                         headerColIdx.ref = idx;
-                    if (c.includes('descripci') || c.includes('concepto') || c.includes('detalle'))
+                    }
+                    else if (c.includes('descripci') || c.includes('concepto') || c.includes('detalle') || c.includes('comercio') || c.includes('beneficiario') || c.includes('transaccion')) {
                         headerColIdx.desc = idx;
-                    if (c.includes('retiro') || c.includes('d[eé]bito') || c.includes('debito') || c.includes('cargos'))
+                    }
+                    else if (c.includes('retiro') || c.includes('debito') || c.includes('cargo') || c.includes('egreso') || c.includes('salida')) {
                         headerColIdx.withdrawals = idx;
-                    if (c.includes('dep[oó]sito') || c.includes('deposito') || c.includes('cr[eé]dito') || c.includes('credito') || c.includes('abonos'))
+                    }
+                    else if (c.includes('deposito') || c.includes('credito') || c.includes('abono') || c.includes('ingreso') || c.includes('entrada')) {
                         headerColIdx.deposits = idx;
-                    if (c.includes('balance') || c.includes('saldo'))
+                    }
+                    else if (c === 'tipo' || c.includes('naturaleza')) {
+                        headerColIdx.type = idx;
+                    }
+                    else if (c.includes('monto') || c.includes('importe') || c.includes('valor') || c.includes('cantidad')) {
+                        headerColIdx.amount = idx;
+                    }
+                    else if (c.includes('balance') || c.includes('saldo')) {
                         headerColIdx.balance = idx;
+                    }
                 });
                 continue;
             }
-            // If we found a structured header, parse row with header columns
+            // 2. Parse CSV Row with Header Columns
             if (headerColIdx && headerColIdx.postDate !== undefined) {
                 const cols = this.parseCSVLine(line);
-                if (cols.length <= 3)
-                    continue; // Skip blank or summary rows like "Totales:"
+                if (cols.length < 2)
+                    continue;
                 const rawDate = cols[headerColIdx.postDate] || '';
                 if (!/\d{1,2}[\/\-\.]\d{1,2}/.test(rawDate))
                     continue;
-                const dateMatch = rawDate.match(/(\d{1,2})[\/\-\.](\d{1,2})(?:[\/\-\.](\d{2,4}))?/);
-                if (!dateMatch)
-                    continue;
-                const day = parseInt(dateMatch[1], 10);
-                const month = parseInt(dateMatch[2], 10);
-                let year = dateMatch[3] ? parseInt(dateMatch[3], 10) : new Date().getFullYear();
-                if (year < 100)
-                    year += 2000;
-                const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-                const rawDesc = headerColIdx.desc !== undefined ? cols[headerColIdx.desc] : (cols[5] || '');
+                const dateStr = this.parseAnyDate(rawDate);
+                const rawDesc = headerColIdx.desc !== undefined ? cols[headerColIdx.desc] : (cols[1] || '');
                 if (/^\s*totales?\s*:?\s*$/i.test(rawDesc) || (cols[0] === '' && /totales?/i.test(rawDesc)))
                     continue;
-                const txCode = headerColIdx.txCode !== undefined ? cols[headerColIdx.txCode] : (cols[3] || '');
-                const ref = headerColIdx.ref !== undefined ? cols[headerColIdx.ref] : (cols[4] || '');
-                const withdrawalStr = headerColIdx.withdrawals !== undefined ? cols[headerColIdx.withdrawals] : (cols[6] || '0');
-                const depositStr = headerColIdx.deposits !== undefined ? cols[headerColIdx.deposits] : (cols[7] || '0');
-                const withdrawal = parseFloat(withdrawalStr.replace(/,/g, '')) || 0;
-                const deposit = parseFloat(depositStr.replace(/,/g, '')) || 0;
+                const txCode = headerColIdx.txCode !== undefined ? cols[headerColIdx.txCode] : undefined;
+                const ref = headerColIdx.ref !== undefined ? cols[headerColIdx.ref] : undefined;
                 let type = 'EXPENSE';
                 let amount = 0;
-                if (deposit > 0) {
-                    type = 'INCOME';
-                    amount = deposit;
+                // Case A: Distinct Withdrawal & Deposit Columns
+                if (headerColIdx.withdrawals !== undefined || headerColIdx.deposits !== undefined) {
+                    const wStr = headerColIdx.withdrawals !== undefined ? cols[headerColIdx.withdrawals] : '0';
+                    const dStr = headerColIdx.deposits !== undefined ? cols[headerColIdx.deposits] : '0';
+                    const wVal = Math.abs(parseFloat(wStr.replace(/[^\d.-]/g, '')) || 0);
+                    const dVal = Math.abs(parseFloat(dStr.replace(/[^\d.-]/g, '')) || 0);
+                    if (dVal > 0) {
+                        type = 'INCOME';
+                        amount = dVal;
+                    }
+                    else if (wVal > 0) {
+                        type = 'EXPENSE';
+                        amount = wVal;
+                    }
+                    else {
+                        continue; // Skip 0 rows
+                    }
                 }
-                else if (withdrawal > 0) {
-                    type = 'EXPENSE';
-                    amount = withdrawal;
+                // Case B: Single Amount Column
+                else if (headerColIdx.amount !== undefined) {
+                    const amtStr = cols[headerColIdx.amount] || '0';
+                    const isNegative = amtStr.includes('-') || /^\(.*\)$/.test(amtStr);
+                    const isExplicitPositive = amtStr.includes('+');
+                    const parsedNum = Math.abs(parseFloat(amtStr.replace(/[^\d.-]/g, '')) || 0);
+                    if (parsedNum <= 0)
+                        continue;
+                    amount = parsedNum;
+                    if (isNegative) {
+                        type = 'EXPENSE';
+                    }
+                    else if (isExplicitPositive) {
+                        type = 'INCOME';
+                    }
+                    else if (headerColIdx.type !== undefined) {
+                        const tStr = normalizeStr(cols[headerColIdx.type]);
+                        if (tStr.startsWith('c') || tStr.includes('credito') || tStr.includes('deposito') || tStr.includes('abono')) {
+                            type = 'INCOME';
+                        }
+                        else {
+                            type = 'EXPENSE';
+                        }
+                    }
+                    else {
+                        const descNorm = normalizeStr(rawDesc);
+                        const isIncomeByDesc = /nomina|sueldo|salario|quincena|deposito|abono|transferencia recibida|ach recibido|lbtr recibido|cashback|interes/.test(descNorm);
+                        type = isIncomeByDesc ? 'INCOME' : 'EXPENSE';
+                    }
                 }
-                else {
-                    continue; // 0 amount row
-                }
+                if (amount <= 0)
+                    continue;
                 const cleanDesc = this.cleanPromericaDescription(rawDesc, txCode, type);
                 entries.push({
                     date: dateStr,
@@ -235,25 +339,18 @@ class StatementService {
                 });
                 continue;
             }
-            // Fallback: Line-by-line regex parsing for unstructured/copy-pasted text
-            // Skip header rows
-            if (/fecha|date|descripci[oó]n|concepto|balance|d[eé]bito|cr[eé]dito|monto|mismo/i.test(line) && !/\d{2}[\/\-\.]\d{2}/.test(line)) {
+            // 3. Fallback: Line-by-line regex parsing for unstructured/copy-pasted text
+            if (/fecha|date|descripci[oó]n|concepto|balance|d[eé]bito|cr[eé]dito|monto/i.test(line) && !/\d{1,2}[\/\-\.]\d{1,2}/.test(line)) {
                 continue;
             }
-            const dateMatch = line.match(/(\d{1,2})[\/\-\.](\d{1,2})(?:[\/\-\.](\d{2,4}))?/);
+            const dateMatch = line.match(/(\d{1,2}[\/\-\.]\d{1,2}(?:[\/\-\.]\d{2,4})?)/);
             if (!dateMatch)
                 continue;
-            const day = parseInt(dateMatch[1], 10);
-            const month = parseInt(dateMatch[2], 10);
-            let year = dateMatch[3] ? parseInt(dateMatch[3], 10) : new Date().getFullYear();
-            if (year < 100)
-                year += 2000;
-            const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-            // Extract all currency amounts
+            const dateStr = this.parseAnyDate(dateMatch[1]);
+            // Extract currency amounts
             const numbers = Array.from(line.matchAll(/(?:RD\$|USD|US\$|\$)?\s*([0-9]{1,3}(?:,[0-9]{3})*(?:\.[0-9]{2})|[0-9]+(?:\.[0-9]{2}))/g));
             if (numbers.length === 0)
                 continue;
-            // Filter out 0.00 if there is another positive number on the line (e.g. 0.00 and 13325.80)
             const validNumbers = numbers
                 .map(n => parseFloat(n[1].replace(/,/g, '')))
                 .filter(n => !isNaN(n) && n > 0);
@@ -270,8 +367,13 @@ class StatementService {
                 .replace(/^[\+\-:]+/g, '')
                 .replace(/\s+/g, ' ')
                 .trim();
-            const isIncome = (/\+|cr[eé]dito|dep[oó]sito|deposito|abono|n[oó]mina|nomina|sueldo|salario|honorarios|quincena|transferencia recibida|transf\.?\s*recibida|ach\s*recibido|lbtr\s*recibido|intereses\s*ganados|cashback|devoluci[oó]n|reembolso|acreditaci[oó]n|acreditad[oa]|\bcr\b|\bdep\b/i.test(line) ||
-                /\+|abono|n[oó]mina|nomina|quincena|dep[oó]sito|deposito|sueldo|salario|acreditad/i.test(desc));
+            // Guard against Credit Card purchases being marked as Income
+            const isCreditCardExpense = /tarjeta\s+(?:de\s+)?cr[eé]dito|tdc|t\.cr[eé]d/i.test(line) && !/pago\s+recibido|abono/i.test(line);
+            let isIncome = false;
+            if (!isCreditCardExpense) {
+                isIncome = (/^\s*\+|\b(dep[oó]sito|deposito|abono|n[oó]mina|nomina|sueldo|salario|honorarios|quincena|transferencia\s+recibida|transf\.?\s*recibida|ach\s*recibido|lbtr\s*recibido|intereses\s*ganados|cashback|devoluci[oó]n|reembolso|acreditaci[oó]n|acreditad[oa])\b/i.test(line) ||
+                    /\b(abono|n[oó]mina|nomina|quincena|dep[oó]sito|deposito|sueldo|salario)\b/i.test(desc));
+            }
             const type = isIncome ? 'INCOME' : 'EXPENSE';
             const cleanDesc = this.cleanPromericaDescription(desc, undefined, type);
             entries.push({
@@ -302,7 +404,7 @@ class StatementService {
             items: []
         };
         const usedTxIds = new Set();
-        // 1st Pass: Match or Add Statement Entries (Statement is the Absolute Truth)
+        // Pass: Match or Add Statement Entries (Statement is the Master Ground Truth)
         for (const entry of entries) {
             if (entry.type === 'INCOME') {
                 report.totalIncomeAmount += entry.amount;
@@ -310,14 +412,15 @@ class StatementService {
             else {
                 report.totalExpenseAmount += entry.amount;
             }
-            // Find matching existing transaction (same date +/- 2 days and same amount)
+            // Find matching existing transaction (same date +/- 3 days and same amount)
             const match = existingTransactions.find(tx => {
                 if (usedTxIds.has(tx.id))
                     return false;
                 const isSameAmount = Math.abs(tx.amount - entry.amount) < 0.05;
                 if (!isSameAmount)
                     return false;
-                // Date proximity check
+                if (tx.type !== entry.type)
+                    return false;
                 const txDate = tx.date.substring(0, 10);
                 const diffDays = Math.abs(new Date(txDate).getTime() - new Date(entry.date).getTime()) / (1000 * 3600 * 24);
                 return diffDays <= 3;
@@ -325,7 +428,6 @@ class StatementService {
             if (match) {
                 usedTxIds.add(match.id);
                 report.matchedCount++;
-                // If existing transaction had a generic or unpolished name, upgrade with official statement description!
                 let updated = false;
                 if (match.merchant.startsWith('Transacción') || match.merchant.startsWith('Consumo Tarjeta') || match.merchant !== entry.description) {
                     const cleanDesc = entry.description.replace(/^Retiro en Cajero \(/, '').replace(/\)$/, '');
@@ -347,18 +449,17 @@ class StatementService {
                 });
             }
             else {
-                // Missing transaction (present in statement but wasn't in email notifications, e.g. Nómina, ATM)
                 if (autoImport) {
                     const category = categorization_service_1.categorizationService.categorize(entry.description, undefined, entry.type);
                     const newTx = db_1.dbOps.createTransaction({
                         userId,
                         bank: bankCode,
-                        bankName: bankCode === 'PROMERICA' ? 'Banco Promerica' : bankCode,
+                        bankName: bankCode === 'PROMERICA' ? 'Banco Promerica' : (bankCode === 'POPULAR' ? 'Banco Popular' : bankCode),
                         type: entry.type,
                         amount: entry.amount,
                         currency: entry.currency,
                         merchant: entry.description,
-                        date: new Date(entry.date).toISOString(),
+                        date: `${entry.date}T12:00:00.000Z`,
                         category,
                         notes: entry.reference ? `Ref: ${entry.reference} (Estado de Cuenta)` : 'Importado desde Estado de Cuenta',
                         isManual: false
@@ -370,68 +471,18 @@ class StatementService {
                         matchedTransactionId: newTx.id,
                         details: entry.type === 'INCOME'
                             ? `Ingreso oficial detectado e importado al balance.`
-                            : `Movimiento oficial agregado desde estado de cuenta.`
+                            : `Gasto oficial detectado e importado al balance.`
                     });
                 }
             }
         }
-        // 2nd Pass: Remove unverified email transactions within statement period
-        // Determine the statement date range
-        let minDateStr = '';
-        let maxDateStr = '';
-        const desdeMatch = statementText.match(/fecha\s*desde\s*:?,?\s*(\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{2,4})/i);
-        const hastaMatch = statementText.match(/fecha\s*hasta\s*:?,?\s*(\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{2,4})/i);
-        if (desdeMatch) {
-            const parts = desdeMatch[1].split(/[\/\-\.]/);
-            let y = parts[2] ? parseInt(parts[2], 10) : new Date().getFullYear();
-            if (y < 100)
-                y += 2000;
-            minDateStr = `${y}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
-        }
-        if (hastaMatch) {
-            const parts = hastaMatch[1].split(/[\/\-\.]/);
-            let y = parts[2] ? parseInt(parts[2], 10) : new Date().getFullYear();
-            if (y < 100)
-                y += 2000;
-            maxDateStr = `${y}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
-        }
-        if (!minDateStr || !maxDateStr) {
+        // Save reconciled period for deduplication without destructive deletions
+        if (entries.length > 0) {
             const sortedDates = entries.map(e => e.date).sort();
-            if (sortedDates.length > 0) {
-                minDateStr = sortedDates[0];
-                maxDateStr = sortedDates[sortedDates.length - 1];
-            }
-        }
-        if (minDateStr && maxDateStr) {
-            db_1.dbOps.saveReconciledPeriod(userId, bankCode, minDateStr, maxDateStr);
-            const minTime = new Date(`${minDateStr}T00:00:00.000Z`).getTime() - (24 * 3600 * 1000);
-            const maxTime = new Date(`${maxDateStr}T23:59:59.999Z`).getTime() + (24 * 3600 * 1000);
-            for (const tx of existingTransactions) {
-                // If this transaction was matched, keep it
-                if (usedTxIds.has(tx.id))
-                    continue;
-                const txTime = new Date(tx.date).getTime();
-                // If it falls within the statement date window but was NOT in the statement, it's a ghost/declined/canceled email transaction!
-                if (txTime >= minTime && txTime <= maxTime) {
-                    if (tx.externalId) {
-                        db_1.dbOps.ignoreExternalId(userId, tx.externalId);
-                    }
-                    db_1.dbOps.deleteTransaction(userId, tx.id);
-                    report.removedCount++;
-                    report.items.push({
-                        entry: {
-                            date: tx.date.substring(0, 10),
-                            rawDate: tx.date.substring(0, 10),
-                            description: tx.merchant,
-                            amount: tx.amount,
-                            currency: tx.currency,
-                            type: tx.type
-                        },
-                        status: 'REMOVED',
-                        matchedTransactionId: tx.id,
-                        details: 'Descartado: se leyó de un correo pero NO figura en el estado de cuenta oficial (cargo declinado, cancelado o duplicado).'
-                    });
-                }
+            const minDateStr = sortedDates[0];
+            const maxDateStr = sortedDates[sortedDates.length - 1];
+            if (minDateStr && maxDateStr) {
+                db_1.dbOps.saveReconciledPeriod(userId, bankCode, minDateStr, maxDateStr);
             }
         }
         report.totalIncomeAmount = Math.round(report.totalIncomeAmount * 100) / 100;
