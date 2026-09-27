@@ -4,10 +4,7 @@
   "private": true,
   "description": "Root workspace for GastaBien App",
   "scripts": {
-    "build:backend": "npm --prefix backend run build",
-    "build:web": "npm --prefix web run build",
-    "build": "npm --prefix backend install && npm --prefix backend run build",
-    "prestart": "npm --prefix backend install && npm --prefix backend run build",
+    "build": "npm --prefix backend install --omit=dev",
     "start": "node backend/dist/index.js"
   }
 }
