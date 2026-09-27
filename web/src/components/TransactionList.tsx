@@ -2,11 +2,15 @@ import React, { useState } from 'react';
 import { Transaction, BankCode, Category } from '../types';
 import { 
   Search, 
+  Filter, 
   Trash2, 
   Edit3, 
-  Check, 
-  X,
-  Scroll
+  ArrowDownLeft, 
+  ArrowUpRight,
+  CreditCard,
+  Tag,
+  Check,
+  X
 } from 'lucide-react';
 
 interface TransactionListProps {
@@ -38,6 +42,7 @@ export const TransactionList: React.FC<TransactionListProps> = ({
   loading = false
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
+  const [selectedBank, setSelectedBank] = useState<string>('ALL');
   const [selectedCategory, setSelectedCategory] = useState<string>('ALL');
   const [selectedType, setSelectedType] = useState<string>('ALL');
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -57,7 +62,9 @@ export const TransactionList: React.FC<TransactionListProps> = ({
       return d.toLocaleDateString('es-DO', {
         month: 'short',
         day: 'numeric',
-        year: 'numeric'
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
       });
     } catch {
       return isoString;
@@ -67,217 +74,265 @@ export const TransactionList: React.FC<TransactionListProps> = ({
   const getBankBadgeStyle = (bank: BankCode) => {
     switch (bank) {
       case 'POPULAR':
-        return 'bg-[#0d1e4c] text-[#00ffff] border-[#1e3c84] shadow-[1px_1px_0px_#000]';
+        return 'bg-blue-950 text-blue-300 border-blue-800/60';
       case 'BHD':
-        return 'bg-[#002a18] text-[#ffcc00] border-[#005530] shadow-[1px_1px_0px_#000]';
+        return 'bg-emerald-950 text-emerald-300 border-emerald-800/60';
       case 'PROMERICA':
-        return 'bg-[#00291d] text-[#00e676] border-[#005c41] shadow-[1px_1px_0px_#000]';
+        return 'bg-teal-950 text-teal-300 border-teal-800/60';
       case 'QIK':
-        return 'bg-[#2a0845] text-[#d65dff] border-[#55108b] shadow-[1px_1px_0px_#000]';
+        return 'bg-purple-950 text-purple-300 border-purple-800/60';
       default:
-        return 'bg-[#111132] text-white border-[#3b3b77]';
+        return 'bg-slate-800 text-slate-300 border-slate-700';
     }
   };
 
-  const filtered = transactions.filter((tx) => {
-    const matchesSearch =
+  // Filter transactions
+  const filtered = transactions.filter(tx => {
+    const matchesSearch = 
       tx.merchant.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (tx.notes && tx.notes.toLowerCase().includes(searchTerm.toLowerCase()));
+      (tx.description && tx.description.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      (tx.accountReference && tx.accountReference.toLowerCase().includes(searchTerm.toLowerCase()));
+
+    const matchesBank = selectedBank === 'ALL' || tx.bank === selectedBank;
     const matchesCategory = selectedCategory === 'ALL' || tx.category === selectedCategory;
     const matchesType = selectedType === 'ALL' || tx.type === selectedType;
-    return matchesSearch && matchesCategory && matchesType;
+
+    return matchesSearch && matchesBank && matchesCategory && matchesType;
   });
 
-  return (
-    <section className="retro-box p-4 sm:p-5 mt-6" data-purpose="transactions-quest-log">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b-2 border-dashed border-[#444477] pb-3 mb-4">
-        <div>
-          <h3 className="font-pixel text-xs sm:text-sm text-[#ffcc00] pixel-text-shadow tracking-wider flex items-center gap-2">
-            <span>📜</span> [QUEST LOG // HISTORIAL DE MOVIMIENTOS]
-          </h3>
-          <p className="font-vt text-sm text-[#00d8f6] tracking-wider mt-0.5">
-            MOVIMIENTOS EXTRAÍDOS DE ESTADOS DE CUENTA & CORREOS
-          </p>
-        </div>
-        <div className="font-pixel text-[9px] bg-black text-[#39ff14] border border-[#39ff14] px-2.5 py-1 self-start sm:self-auto shadow-[2px_2px_0px_#000]">
-          REGISTROS: {filtered.length} / {transactions.length}
-        </div>
-      </div>
+  const startEdit = (tx: Transaction) => {
+    setEditingId(tx.id);
+    setTempCategory(tx.category);
+  };
 
-      {/* Filter & Search Bar */}
-      <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 mb-4 font-pixel text-[9px]">
-        {/* Search */}
-        <div className="sm:col-span-6 relative">
+  const saveEdit = (id: string) => {
+    onUpdateCategory(id, tempCategory);
+    setEditingId(null);
+  };
+
+  return (
+    <div className="glass-card rounded-2xl p-6">
+      
+      {/* Header & Filters */}
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 mb-6">
+        <div>
+          <h3 className="text-lg font-bold text-white flex items-center gap-2">
+            Registro de Movimientos
+            <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-emerald-950 text-emerald-400 border border-emerald-800/40">
+              {filtered.length} transacciones
+            </span>
+          </h3>
+          <p className="text-xs text-slate-400">Extracción de correos y registros manuales</p>
+        </div>
+
+        {/* Search Bar */}
+        <div className="relative flex-1 max-w-md">
+          <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
           <input
             type="text"
+            placeholder="Buscar por comercio (Total, Sirena, Netflix...)"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            placeholder="BUSCAR COMERCIO O CONCEPTO..."
-            className="w-full bg-black border-2 border-[#3b3b77] focus:border-[#00ffff] px-3 py-2 text-white placeholder-slate-500 font-pixel text-[9px] outline-none shadow-[inset_2px_2px_0px_#000]"
+            className="w-full bg-slate-900 border border-slate-800 rounded-xl pl-9 pr-4 py-2 text-xs sm:text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:border-emerald-500 transition-all"
           />
-          {searchTerm && (
-            <button
-              onClick={() => setSearchTerm('')}
-              className="absolute right-2.5 top-2 text-slate-400 hover:text-white"
-            >
-              <X className="w-3.5 h-3.5" />
-            </button>
-          )}
-        </div>
-
-        {/* Category select */}
-        <div className="sm:col-span-3">
-          <select
-            value={selectedCategory}
-            onChange={(e) => setSelectedCategory(e.target.value)}
-            className="w-full bg-black border-2 border-[#3b3b77] focus:border-[#00ffff] px-2.5 py-2 text-[#ffcc00] font-pixel text-[8px] outline-none shadow-[inset_2px_2px_0px_#000]"
-          >
-            <option value="ALL">★ TODAS CATEGORÍAS</option>
-            {CATEGORIES.map((cat) => (
-              <option key={cat} value={cat}>
-                {cat.toUpperCase()}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        {/* Type select */}
-        <div className="sm:col-span-3">
-          <select
-            value={selectedType}
-            onChange={(e) => setSelectedType(e.target.value)}
-            className="w-full bg-black border-2 border-[#3b3b77] focus:border-[#00ffff] px-2.5 py-2 text-[#00ffff] font-pixel text-[8px] outline-none shadow-[inset_2px_2px_0px_#000]"
-          >
-            <option value="ALL">★ TODOS TIPOS</option>
-            <option value="EXPENSE">▼ GASTOS (OUT)</option>
-            <option value="INCOME">▲ INGRESOS (IN)</option>
-          </select>
         </div>
       </div>
 
-      {/* Transactions List */}
-      {loading ? (
-        <div className="text-center py-10 font-pixel text-[10px] text-arcade-cyan animate-pulse">
-          CARGANDO MOVIMIENTOS...
-        </div>
-      ) : filtered.length === 0 ? (
-        <div className="text-center py-10 bg-black/60 border-2 border-dashed border-[#3b3b77] p-6">
-          <p className="font-pixel text-[10px] text-arcade-gold mb-2">NO HAY MOVIMIENTOS QUE COINCIDAN</p>
-          <p className="font-vt text-base text-slate-400">
-            Sube tu estado de cuenta con el botón superior o sincroniza con Gmail.
-          </p>
+      {/* Filter Chips Bar */}
+      <div className="flex flex-wrap items-center gap-2 mb-6 pb-4 border-b border-slate-800/80 text-xs">
+        <span className="text-slate-400 flex items-center gap-1 mr-1">
+          <Filter className="w-3.5 h-3.5" /> Filtros:
+        </span>
+
+        {/* Bank Filter */}
+        <select
+          value={selectedBank}
+          onChange={(e) => setSelectedBank(e.target.value)}
+          className="bg-slate-900 border border-slate-800 text-slate-300 rounded-lg px-2.5 py-1.5 focus:outline-none focus:border-emerald-500"
+        >
+          <option value="ALL">Todos los Bancos</option>
+          <option value="POPULAR">Banco Popular</option>
+          <option value="BHD">Banco BHD</option>
+          <option value="PROMERICA">Promerica</option>
+          <option value="QIK">Qik Banco Digital</option>
+          <option value="MANUAL">Manual</option>
+        </select>
+
+        {/* Category Filter */}
+        <select
+          value={selectedCategory}
+          onChange={(e) => setSelectedCategory(e.target.value)}
+          className="bg-slate-900 border border-slate-800 text-slate-300 rounded-lg px-2.5 py-1.5 focus:outline-none focus:border-emerald-500"
+        >
+          <option value="ALL">Todas las Categorías</option>
+          {CATEGORIES.map(c => (
+            <option key={c} value={c}>{c}</option>
+          ))}
+        </select>
+
+        {/* Type Filter */}
+        <select
+          value={selectedType}
+          onChange={(e) => setSelectedType(e.target.value)}
+          className="bg-slate-900 border border-slate-800 text-slate-300 rounded-lg px-2.5 py-1.5 focus:outline-none focus:border-emerald-500"
+        >
+          <option value="ALL">Todos los Tipos</option>
+          <option value="EXPENSE">Gastos (-)</option>
+          <option value="INCOME">Ingresos (+)</option>
+        </select>
+
+        {(selectedBank !== 'ALL' || selectedCategory !== 'ALL' || selectedType !== 'ALL' || searchTerm) && (
+          <button
+            onClick={() => {
+              setSelectedBank('ALL');
+              setSelectedCategory('ALL');
+              setSelectedType('ALL');
+              setSearchTerm('');
+            }}
+            className="text-slate-400 hover:text-rose-400 text-xs underline ml-auto"
+          >
+            Limpiar filtros
+          </button>
+        )}
+      </div>
+
+      {filtered.length === 0 ? (
+        <div className="py-12 text-center">
+          <p className="text-slate-400 font-medium">No se encontraron transacciones registradas.</p>
+          <p className="text-xs text-slate-500 mt-1">Sube tu Estado de Cuenta o conecta tu correo para comenzar.</p>
         </div>
       ) : (
-        <div className="space-y-2.5">
-          {filtered.map((tx) => {
-            const isExpense = tx.type === 'EXPENSE';
-            const isEditing = editingId === tx.id;
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-xs sm:text-sm">
+            <thead>
+              <tr className="text-[11px] uppercase tracking-wider text-slate-400 border-b border-slate-800/80">
+                <th className="pb-3 pl-2">Comercio & Detalle</th>
+                <th className="pb-3">Banco / Cuenta</th>
+                <th className="pb-3">Categoría</th>
+                <th className="pb-3">Fecha</th>
+                <th className="pb-3 text-right">Monto</th>
+                <th className="pb-3 pr-2 text-right">Acciones</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-800/50">
+              {filtered.map((tx) => {
+                const isExpense = tx.type === 'EXPENSE';
+                const isEditing = editingId === tx.id;
 
-            return (
-              <div
-                key={tx.id}
-                className="bg-black/90 border-2 border-[#2a2a5a] hover:border-[#ffd700] p-3 transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-[2px_2px_0px_#000]"
-              >
-                {/* Left info */}
-                <div className="flex items-start sm:items-center space-x-3">
-                  {/* Type icon box */}
-                  <div
-                    className={`w-9 h-9 border-2 flex items-center justify-center shrink-0 font-pixel text-xs font-bold shadow-[1px_1px_0px_#000] ${
-                      isExpense
-                        ? 'bg-[#2b0b14] border-[#ff3344] text-[#ff3344]'
-                        : 'bg-[#092015] border-[#39ff14] text-[#39ff14]'
-                    }`}
-                  >
-                    {isExpense ? '▼' : '▲'}
-                  </div>
+                return (
+                  <tr key={tx.id} className="hover:bg-slate-900/60 transition-colors group">
+                    
+                    {/* Merchant & Type Icon */}
+                    <td className="py-3.5 pl-2">
+                      <div className="flex items-center gap-3">
+                        <div className={`p-2 rounded-xl flex-shrink-0 ${
+                          isExpense ? 'bg-rose-500/10 text-rose-400' : 'bg-emerald-500/10 text-emerald-400'
+                        }`}>
+                          {isExpense ? (
+                            <ArrowDownLeft className="w-4 h-4" />
+                          ) : (
+                            <ArrowUpRight className="w-4 h-4" />
+                          )}
+                        </div>
+                        <div>
+                          <p className="font-semibold text-white tracking-tight">{tx.merchant}</p>
+                          {tx.notes && (
+                            <p className="text-[11px] text-slate-400 truncate max-w-xs">{tx.notes}</p>
+                          )}
+                        </div>
+                      </div>
+                    </td>
 
-                  {/* Details */}
-                  <div>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="font-pixel text-[9px] sm:text-[10px] text-white font-bold">
-                        {tx.merchant}
-                      </span>
-                      <span className={`font-pixel text-[7px] px-1.5 py-0.5 border ${getBankBadgeStyle(tx.bank)}`}>
-                        {tx.bank}
-                      </span>
-                    </div>
+                    {/* Bank & Card info */}
+                    <td className="py-3.5">
+                      <div className="flex flex-col">
+                        <span className={`inline-block px-2 py-0.5 rounded text-[11px] font-semibold border w-fit ${getBankBadgeStyle(tx.bank)}`}>
+                          {tx.bankName}
+                        </span>
+                        {tx.accountReference && (
+                          <span className="text-[11px] text-slate-400 mt-0.5 flex items-center gap-1">
+                            <CreditCard className="w-3 h-3" /> {tx.accountReference}
+                          </span>
+                        )}
+                      </div>
+                    </td>
 
-                    <div className="flex flex-wrap items-center gap-2 mt-1 text-[8px] font-pixel text-slate-400">
-                      <span className="text-[#00ffff]">{formatDate(tx.date)}</span>
-                      <span>•</span>
+                    {/* Category */}
+                    <td className="py-3.5">
                       {isEditing ? (
-                        <div className="inline-flex items-center gap-1">
+                        <div className="flex items-center gap-1.5">
                           <select
                             value={tempCategory}
                             onChange={(e) => setTempCategory(e.target.value as Category)}
-                            className="bg-black border border-[#ffd700] text-[#ffd700] text-[7px] px-1 py-0.5 outline-none"
+                            className="bg-slate-800 border border-emerald-500 text-white rounded px-2 py-1 text-xs focus:outline-none"
                           >
-                            {CATEGORIES.map((cat) => (
-                              <option key={cat} value={cat}>
-                                {cat}
-                              </option>
+                            {CATEGORIES.map(c => (
+                              <option key={c} value={c}>{c}</option>
                             ))}
                           </select>
-                          <button
-                            onClick={() => {
-                              onUpdateCategory(tx.id, tempCategory);
-                              setEditingId(null);
-                            }}
-                            className="text-[#39ff14] hover:text-white"
+                          <button 
+                            onClick={() => saveEdit(tx.id)}
+                            className="p-1 rounded bg-emerald-600 hover:bg-emerald-500 text-white"
                           >
                             <Check className="w-3 h-3" />
                           </button>
-                          <button onClick={() => setEditingId(null)} className="text-[#ff3344] hover:text-white">
+                          <button 
+                            onClick={() => setEditingId(null)}
+                            className="p-1 rounded bg-slate-700 hover:bg-slate-600 text-slate-300"
+                          >
                             <X className="w-3 h-3" />
                           </button>
                         </div>
                       ) : (
-                        <span
-                          onClick={() => {
-                            setEditingId(tx.id);
-                            setTempCategory(tx.category);
-                          }}
-                          className="text-[#ffcc00] hover:underline cursor-pointer flex items-center gap-1"
-                          title="Clic para cambiar categoría"
-                        >
-                          {tx.category} <Edit3 className="w-2.5 h-2.5 opacity-60" />
+                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-slate-800/80 text-slate-200 border border-slate-700">
+                          <Tag className="w-3 h-3 text-slate-400" />
+                          {tx.category}
                         </span>
                       )}
-                      {tx.notes && (
-                        <>
-                          <span>•</span>
-                          <span className="font-vt text-xs text-slate-400">{tx.notes}</span>
-                        </>
-                      )}
-                    </div>
-                  </div>
-                </div>
+                    </td>
 
-                {/* Right Amount & Delete Action */}
-                <div className="flex items-center justify-between sm:justify-end space-x-3 self-end sm:self-auto w-full sm:w-auto pt-1 sm:pt-0 border-t sm:border-t-0 border-[#222244]">
-                  <div
-                    className={`font-pixel text-[11px] sm:text-xs font-bold ${
-                      isExpense ? 'text-[#ff3344] pixel-text-glow-red' : 'text-[#39ff14] pixel-text-glow-green'
-                    }`}
-                  >
-                    {isExpense ? '-' : '+'}
-                    {formatDOP(tx.amount, tx.currency)}
-                  </div>
+                    {/* Date */}
+                    <td className="py-3.5 text-xs text-slate-400">
+                      {formatDate(tx.date)}
+                    </td>
 
-                  <button
-                    onClick={() => onDelete(tx.id)}
-                    className="text-slate-600 hover:text-[#ff3344] p-1 transition-colors"
-                    title="Eliminar movimiento"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-              </div>
-            );
-          })}
+                    {/* Amount */}
+                    <td className="py-3.5 text-right font-bold">
+                      <span className={isExpense ? 'text-rose-400' : 'text-emerald-400'}>
+                        {isExpense ? '-' : '+'} {formatDOP(tx.amount, tx.currency)}
+                      </span>
+                    </td>
+
+                    {/* Actions */}
+                    <td className="py-3.5 pr-2 text-right">
+                      <div className="flex items-center justify-end gap-1 opacity-80 group-hover:opacity-100 transition-opacity">
+                        {!isEditing && (
+                          <button
+                            onClick={() => startEdit(tx)}
+                            className="p-1.5 rounded-lg text-slate-400 hover:text-emerald-400 hover:bg-slate-800 transition-all"
+                            title="Cambiar categoría"
+                          >
+                            <Edit3 className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                        <button
+                          onClick={() => onDelete(tx.id)}
+                          className="p-1.5 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-slate-800 transition-all"
+                          title="Eliminar transacción"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </td>
+
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
         </div>
       )}
-    </section>
+
+    </div>
   );
 };

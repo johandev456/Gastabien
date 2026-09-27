@@ -1,5 +1,17 @@
 import React, { useState, useEffect } from 'react';
-import { X, Mail, CheckCircle2, KeyRound, AlertCircle, Check } from 'lucide-react';
+import { 
+  X, 
+  Mail, 
+  CheckCircle2, 
+  ExternalLink, 
+  Building2, 
+  FileText, 
+  KeyRound, 
+  Send,
+  AlertCircle,
+  Save,
+  Check
+} from 'lucide-react';
 import { ApiClient } from '../api/client';
 
 interface BankConnectionModalProps {
@@ -18,7 +30,7 @@ export const BankConnectionModal: React.FC<BankConnectionModalProps> = ({
   const [activeTab, setActiveTab] = useState<'gmail' | 'paste' | 'banks'>('gmail');
   const [connecting, setConnecting] = useState(false);
   const [showManualConfig, setShowManualConfig] = useState(false);
-
+  
   // Custom Google OAuth credentials form
   const [clientId, setClientId] = useState('');
   const [clientSecret, setClientSecret] = useState('');
@@ -34,15 +46,14 @@ export const BankConnectionModal: React.FC<BankConnectionModalProps> = ({
 
   useEffect(() => {
     if (isOpen) {
-      ApiClient.getGoogleAuthUrl()
-        .then((res) => {
-          if (!res.configured) {
-            setShowManualConfig(true);
-          }
-        })
-        .catch(() => {
+      // Check if configured
+      ApiClient.getGoogleAuthUrl().then(res => {
+        if (!res.configured) {
           setShowManualConfig(true);
-        });
+        }
+      }).catch(() => {
+        setShowManualConfig(true);
+      });
     }
   }, [isOpen]);
 
@@ -81,6 +92,7 @@ export const BankConnectionModal: React.FC<BankConnectionModalProps> = ({
           type: 'success',
           text: '¡Credenciales guardadas! Redirigiendo a Google...'
         });
+        // Now trigger auth
         const authRes = await ApiClient.getGoogleAuthUrl();
         if (authRes.url) {
           setTimeout(() => {
@@ -124,9 +136,7 @@ export const BankConnectionModal: React.FC<BankConnectionModalProps> = ({
     } catch (err: any) {
       setParseResult({
         success: false,
-        message:
-          err.message ||
-          'No se pudo extraer la información del banco. Asegúrate de incluir el monto (ej. RD$ 1,500.00) y el comercio.'
+        message: err.message || 'No se pudo extraer la información del banco. Asegúrate de incluir el monto (ej. RD$ 1,500.00) y el comercio.'
       });
     } finally {
       setIsProcessing(false);
@@ -138,240 +148,317 @@ export const BankConnectionModal: React.FC<BankConnectionModalProps> = ({
       name: 'Banco Popular Dominicano',
       email: 'notificaciones@bpd.com.do',
       badge: 'Popular',
-      color: '#00d8f6',
-      sample: 'Notificación de Débito por Compra en SUPERMERCADOS NACIONAL por RD$ 2,450.00'
+      color: 'border-blue-700/50 bg-blue-950/40 text-blue-400',
+      sample: 'Estimado cliente, se ha realizado un débito por compra con su Tarjeta terminada en 4829 por un monto de RD$ 2,450.00 en ESTACION TOTAL CHURCHILL.'
     },
     {
       name: 'Banco BHD',
       email: 'alertas@bhd.com.do',
       badge: 'BHD',
-      color: '#ffcc00',
-      sample: 'Aviso de Transacción: Consumo con Tarjeta en TEXACO CHURCHILL por valor de RD$ 1,800.00'
+      color: 'border-emerald-700/50 bg-emerald-950/40 text-emerald-400',
+      sample: 'Alerta BHD: Consumo aprobado por RD$ 5,890.75 en SUPERMERCADOS NACIONAL con su tarjeta terminada en 9102.'
     },
     {
       name: 'Banco Promerica',
       email: 'notificaciones@promerica.com.do',
       badge: 'Promerica',
-      color: '#00e676',
-      sample: 'Transacción Aprobada: Consumo de RD$ 750.00 en UBER TRIP con su tarjeta terminada en 1234'
+      color: 'border-teal-700/50 bg-teal-950/40 text-teal-400',
+      sample: 'Estimado cliente, consumo por RD$ 750.00 en UBER TRIP SANTO DOMINGO con su tarjeta terminada en 3321.'
     },
     {
       name: 'Qik Banco Digital',
       email: 'notificaciones@qik.com.do',
       badge: 'Qik',
-      color: '#d038f0',
-      sample: 'Pago realizado con tu Tarjeta Qik por RD$ 420.00 en SPOTIFY'
+      color: 'border-purple-700/50 bg-purple-950/40 text-purple-400',
+      sample: 'Consumo por RD$ 1,420.00 en Farmacia Carol 27 de Febrero con tu tarjeta Qik terminada en 1104.'
     }
   ];
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-sm">
-      <div className="retro-box w-full max-w-2xl max-h-[90vh] overflow-y-auto p-5 sm:p-6 relative">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in">
+      <div className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-2xl p-6 shadow-2xl relative max-h-[90vh] overflow-y-auto">
+        
         {/* Header */}
-        <div className="flex items-center justify-between pb-3 border-b-2 border-dashed border-[#444477]">
-          <div>
-            <h3 className="font-pixel text-xs sm:text-sm text-[#ffd700] pixel-text-shadow">
-              ⚙ [CONFIGURACIÓN // BANCOS & GMAIL]
-            </h3>
-            <p className="font-vt text-sm text-[#00ffff] mt-0.5">
-              CONEXIÓN DIRECTA CON TUS NOTIFICACIONES BANCARIAS RD
-            </p>
+        <div className="flex items-center justify-between pb-4 border-b border-slate-800">
+          <div className="flex items-center gap-2.5">
+            <Building2 className="w-5 h-5 text-emerald-400" />
+            <div>
+              <h3 className="text-lg font-bold text-white">Sincronización Bancaria RD</h3>
+              <p className="text-xs text-slate-400">Popular, BHD, Promerica y Qik</p>
+            </div>
           </div>
-          <button onClick={onClose} className="p-1 text-slate-400 hover:text-white border-2 border-transparent hover:border-[#ffd700]">
+          <button
+            onClick={onClose}
+            className="p-1 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition-all"
+          >
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        {/* Navigation Tabs */}
-        <div className="flex border-b-2 border-[#3b3b77] mt-4 mb-4 font-pixel text-[8px]">
+        {/* Tab Navigation */}
+        <div className="flex items-center gap-2 mt-4 p-1 bg-slate-950 rounded-xl border border-slate-800 text-xs font-semibold">
           <button
             onClick={() => setActiveTab('gmail')}
-            className={`pb-2 px-3 border-b-2 font-bold transition-all ${
+            className={`flex-1 py-2 rounded-lg flex items-center justify-center gap-1.5 transition-all ${
               activeTab === 'gmail'
-                ? 'border-[#39ff14] text-[#39ff14]'
-                : 'border-transparent text-slate-400 hover:text-white'
+                ? 'bg-emerald-600 text-white shadow'
+                : 'text-slate-400 hover:text-white'
             }`}
           >
-            ✉ CONECTAR GMAIL
+            <Mail className="w-3.5 h-3.5" />
+            <span>Gmail Automático</span>
           </button>
+
           <button
             onClick={() => setActiveTab('paste')}
-            className={`pb-2 px-3 border-b-2 font-bold transition-all ${
+            className={`flex-1 py-2 rounded-lg flex items-center justify-center gap-1.5 transition-all ${
               activeTab === 'paste'
-                ? 'border-[#00ffff] text-[#00ffff]'
-                : 'border-transparent text-slate-400 hover:text-white'
+                ? 'bg-indigo-600 text-white shadow'
+                : 'text-slate-400 hover:text-white'
             }`}
           >
-            📋 PROBAR CORREO
+            <FileText className="w-3.5 h-3.5" />
+            <span>Pegar Correo Real</span>
           </button>
+
           <button
             onClick={() => setActiveTab('banks')}
-            className={`pb-2 px-3 border-b-2 font-bold transition-all ${
+            className={`flex-1 py-2 rounded-lg flex items-center justify-center gap-1.5 transition-all ${
               activeTab === 'banks'
-                ? 'border-[#ffd700] text-[#ffd700]'
-                : 'border-transparent text-slate-400 hover:text-white'
+                ? 'bg-slate-800 text-white shadow'
+                : 'text-slate-400 hover:text-white'
             }`}
           >
-            🏦 BANCOS RD COMPATIBLES
+            <Building2 className="w-3.5 h-3.5" />
+            <span>Bancos Compatibles</span>
           </button>
         </div>
 
-        {/* Tab 1: Gmail Connect */}
+        {/* TAB 1: GMAIL OAUTH CONFIGURATION */}
         {activeTab === 'gmail' && (
-          <div className="space-y-4 font-pixel text-[9px]">
-            {isGmailConnected ? (
-              <div className="p-4 bg-[#092015] border-2 border-[#39ff14] space-y-2">
-                <div className="flex items-center gap-2 text-[#39ff14]">
-                  <CheckCircle2 className="w-4 h-4" />
-                  <span className="font-bold">¡CUENTA DE GMAIL CONECTADA!</span>
+          <div className="mt-5 space-y-4 animate-fade-in">
+            <div className="p-4 rounded-2xl bg-slate-950 border border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <div className="p-3 rounded-2xl bg-red-500/10 text-red-400 border border-red-500/20">
+                  <Mail className="w-6 h-6" />
                 </div>
-                <p className="font-vt text-base text-slate-300">
-                  GastaBien escanea tus correos de Popular, BHD, Promerica y Qik automáticamente.
-                </p>
-              </div>
-            ) : (
-              <div className="p-4 bg-black border-2 border-[#ffd700] space-y-3">
-                <div className="flex items-center gap-2 text-[#ffd700]">
-                  <Mail className="w-4 h-4" />
-                  <span className="font-bold">SINCRONIZACIÓN AUTOMÁTICA DE CORREOS</span>
-                </div>
-                <p className="font-vt text-base text-slate-300 leading-relaxed">
-                  Conecta tu Gmail para leer las alertas de compras y transferencias en tiempo real sin ingresar credenciales bancarias.
-                </p>
-                <div className="pt-2">
-                  <button
-                    onClick={handleConnectGmail}
-                    disabled={connecting}
-                    className="pixel-btn pixel-btn-primary w-full"
-                  >
-                    <span>⚡ {connecting ? 'ABRIENDO GOOGLE...' : 'CONECTAR CON GOOGLE'}</span>
-                  </button>
+                <div>
+                  <h4 className="text-sm font-bold text-white flex items-center gap-1.5">
+                    Conectar Bandeja de Gmail
+                    {isGmailConnected ? (
+                      <span className="text-[10px] text-emerald-400 bg-emerald-950 px-2 py-0.5 rounded-full border border-emerald-800">
+                        Conectado
+                      </span>
+                    ) : (
+                      <span className="text-[10px] text-amber-400 bg-amber-950 px-2 py-0.5 rounded-full border border-amber-800">
+                        Pendiente OAuth
+                      </span>
+                    )}
+                  </h4>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    Permiso seguro de solo lectura (`gmail.readonly`) para escanear avisos de bancos.
+                  </p>
                 </div>
               </div>
-            )}
 
-            {/* In-app Manual Config toggle if needed */}
+              <button
+                onClick={handleConnectGmail}
+                disabled={connecting}
+                className="px-4 py-2.5 rounded-xl text-xs font-bold bg-white hover:bg-slate-200 text-slate-950 shadow flex items-center justify-center gap-1.5 transition-all flex-shrink-0"
+              >
+                <ExternalLink className="w-3.5 h-3.5" />
+                <span>{isGmailConnected ? 'Reconectar Gmail' : 'Autorizar con Google'}</span>
+              </button>
+            </div>
+
+            {/* In-app Credentials Configuration Box */}
             {showManualConfig && (
-              <form onSubmit={handleSaveConfig} className="p-4 bg-black border-2 border-[#3b3b77] space-y-3">
-                <div className="flex items-center gap-2 text-[#00ffff]">
-                  <KeyRound className="w-4 h-4" />
-                  <span className="font-bold text-[8px]">CONFIGURAR CREDENCIALES DE GOOGLE OAUTH:</span>
+              <form onSubmit={handleSaveConfig} className="p-4 rounded-2xl bg-slate-950 border border-indigo-900/50 space-y-3 animate-fade-in">
+                <div className="flex items-center gap-2">
+                  <KeyRound className="w-4 h-4 text-indigo-400" />
+                  <h5 className="text-xs font-bold uppercase tracking-wider text-indigo-300">
+                    Configurar Credenciales de Google Cloud OAuth
+                  </h5>
                 </div>
+                <p className="text-xs text-slate-400 leading-relaxed">
+                  Para autorizar Gmail, ingresa las credenciales de tu proyecto de Google Cloud (o configúralas como variables de entorno en Render):
+                </p>
 
-                <div className="space-y-2">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-slate-300 text-[8px] mb-1">GOOGLE CLIENT ID:</label>
+                    <label className="block text-[11px] font-semibold text-slate-300 uppercase mb-1">
+                      Google Client ID
+                    </label>
                     <input
                       type="text"
                       required
                       placeholder="ej: 123456...apps.googleusercontent.com"
                       value={clientId}
                       onChange={(e) => setClientId(e.target.value)}
-                      className="w-full bg-[#111132] border border-slate-700 px-2 py-1.5 text-white font-mono text-[8px] outline-none"
+                      className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-200 placeholder-slate-600 focus:outline-none focus:border-indigo-500 font-mono"
                     />
                   </div>
+
                   <div>
-                    <label className="block text-slate-300 text-[8px] mb-1">GOOGLE CLIENT SECRET:</label>
+                    <label className="block text-[11px] font-semibold text-slate-300 uppercase mb-1">
+                      Google Client Secret
+                    </label>
                     <input
                       type="password"
                       required
                       placeholder="GOCSPX-..."
                       value={clientSecret}
                       onChange={(e) => setClientSecret(e.target.value)}
-                      className="w-full bg-[#111132] border border-slate-700 px-2 py-1.5 text-white font-mono text-[8px] outline-none"
+                      className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-200 placeholder-slate-600 focus:outline-none focus:border-indigo-500 font-mono"
                     />
                   </div>
                 </div>
 
                 {configMessage && (
-                  <div className={`p-2 border text-[8px] ${
-                    configMessage.type === 'success' ? 'bg-[#092015] text-[#39ff14] border-[#39ff14]' : 'bg-[#2b0b14] text-[#ff3344] border-[#ff3344]'
+                  <div className={`p-2.5 rounded-xl border text-xs flex items-center gap-2 ${
+                    configMessage.type === 'success' 
+                      ? 'bg-emerald-950/70 text-emerald-300 border-emerald-800' 
+                      : 'bg-rose-950/70 text-rose-300 border-rose-800'
                   }`}>
-                    {configMessage.text}
+                    {configMessage.type === 'success' ? <Check className="w-3.5 h-3.5" /> : <AlertCircle className="w-3.5 h-3.5" />}
+                    <span>{configMessage.text}</span>
                   </div>
                 )}
 
-                <div className="flex justify-end">
+                <div className="flex items-center justify-between pt-1">
+                  <span className="text-[11px] text-slate-400">
+                    URI de redirección: <code className="bg-slate-900 px-1 py-0.5 rounded text-indigo-300">https://gastabien.onrender.com/api/auth/google/callback</code>
+                  </span>
                   <button
                     type="submit"
-                    disabled={savingConfig}
-                    className="pixel-btn pixel-btn-cyan"
+                    disabled={savingConfig || !clientId.trim() || !clientSecret.trim()}
+                    className="px-4 py-2 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-500 text-white shadow flex items-center gap-1.5 transition-all disabled:opacity-50"
                   >
-                    {savingConfig ? 'GUARDANDO...' : 'GUARDAR Y AUTORIZAR'}
+                    <Save className="w-3.5 h-3.5" />
+                    <span>{savingConfig ? 'Guardando...' : 'Guardar y Autorizar'}</span>
                   </button>
                 </div>
               </form>
             )}
+
+            {/* Step-by-step Setup Guide */}
+            <div className="p-4 rounded-2xl bg-slate-950/70 border border-slate-800 space-y-2.5 text-xs text-slate-300">
+              <h5 className="font-bold text-white flex items-center gap-1.5 text-xs uppercase tracking-wider">
+                <KeyRound className="w-4 h-4 text-emerald-400" />
+                Pasos para crear tu Client ID gratuito en Google Cloud:
+              </h5>
+              <ol className="list-decimal list-inside space-y-1.5 text-slate-300 pl-1 leading-relaxed">
+                <li>Ve a <a href="https://console.cloud.google.com/" target="_blank" rel="noreferrer" className="text-emerald-400 underline font-semibold">Google Cloud Console</a> y crea un proyecto gratuito.</li>
+                <li>En <strong>APIs & Services</strong>, habilita la <strong>Gmail API</strong>.</li>
+                <li>En <strong>OAuth Consent Screen</strong>, añade tu correo como usuario de prueba.</li>
+                <li>En <strong>Credentials</strong>, crea un <em>OAuth Client ID (Web Application)</em> con URI de redirección: <code className="bg-slate-900 px-1 py-0.5 rounded text-emerald-300">https://gastabien.onrender.com/api/auth/google/callback</code>.</li>
+                <li>Pega tu <code className="text-amber-300">Client ID</code> y <code className="text-amber-300">Client Secret</code> en el formulario de arriba.</li>
+              </ol>
+            </div>
           </div>
         )}
 
-        {/* Tab 2: Test / Paste Email */}
+        {/* TAB 2: PASTE RAW REAL EMAIL TEXT */}
         {activeTab === 'paste' && (
-          <form onSubmit={handleParseRawSubmit} className="space-y-3 font-pixel text-[9px]">
-            <div>
-              <label className="block text-[#00ffff] mb-1">REMITENTE DEL BANCO:</label>
-              <select
-                value={rawSender}
-                onChange={(e) => setRawSender(e.target.value)}
-                className="w-full bg-black border-2 border-[#3b3b77] px-2.5 py-1.5 text-[#ffcc00] font-pixel text-[8px] outline-none"
-              >
-                <option value="notificaciones@bpd.com.do">Banco Popular (notificaciones@bpd.com.do)</option>
-                <option value="alertas@bhd.com.do">Banco BHD (alertas@bhd.com.do)</option>
-                <option value="notificaciones@promerica.com.do">Banco Promerica (notificaciones@promerica.com.do)</option>
-                <option value="notificaciones@qik.com.do">Qik Banco Digital (notificaciones@qik.com.do)</option>
-              </select>
+          <form onSubmit={handleParseRawSubmit} className="mt-5 space-y-4 animate-fade-in">
+            <div className="p-3 rounded-xl bg-indigo-950/40 border border-indigo-800/40 text-xs text-indigo-200">
+              💡 <strong>Procesador en Vivo:</strong> Copia el texto o cuerpo de cualquier correo de notificación que hayas recibido de <strong>Popular, BHD, Promerica o Qik</strong> y pégalo abajo para procesarlo al instante.
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1">
+                  Banco Remitente
+                </label>
+                <select
+                  value={rawSender}
+                  onChange={(e) => setRawSender(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-indigo-500"
+                >
+                  <option value="notificaciones@bpd.com.do">Banco Popular (notificaciones@bpd.com.do)</option>
+                  <option value="alertas@bhd.com.do">Banco BHD (alertas@bhd.com.do)</option>
+                  <option value="notificaciones@promerica.com.do">Promerica (notificaciones@promerica.com.do)</option>
+                  <option value="notificaciones@qik.com.do">Qik Banco Digital (notificaciones@qik.com.do)</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1">
+                  Asunto del Correo (opcional)
+                </label>
+                <input
+                  type="text"
+                  placeholder="Ej. Aviso de Débito por Compra"
+                  value={rawSubject}
+                  onChange={(e) => setRawSubject(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-200 placeholder-slate-600 focus:outline-none focus:border-indigo-500"
+                />
+              </div>
             </div>
 
             <div>
-              <label className="block text-[#00ffff] mb-1">TEXTO / CUERPO DEL CORREO:</label>
+              <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1">
+                Cuerpo / Texto del Correo Bancario
+              </label>
               <textarea
-                rows={4}
                 required
-                placeholder="Pega aquí el texto del correo bancario (ej: 'Consumo aprobado por RD$ 1,850.00 en SUPERMERCADO BRAVO...')"
+                rows={4}
+                placeholder="Pega aquí el texto del correo bancario recibido de tu banco..."
                 value={rawText}
                 onChange={(e) => setRawText(e.target.value)}
-                className="w-full bg-black border-2 border-[#3b3b77] p-2 text-white font-pixel text-[8px] outline-none"
+                className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-xs text-slate-200 placeholder-slate-600 focus:outline-none focus:border-indigo-500 font-mono"
               />
             </div>
 
             {parseResult && (
-              <div className={`p-2.5 border text-[8px] ${
-                parseResult.success ? 'bg-[#092015] text-[#39ff14] border-[#39ff14]' : 'bg-[#2b0b14] text-[#ff3344] border-[#ff3344]'
+              <div className={`p-3 rounded-xl border text-xs ${
+                parseResult.success 
+                  ? 'bg-emerald-950/60 text-emerald-300 border-emerald-800' 
+                  : 'bg-rose-950/60 text-rose-300 border-rose-800'
               }`}>
                 {parseResult.message}
               </div>
             )}
 
-            <div className="flex justify-end space-x-2 pt-2">
+            <div className="flex items-center justify-end gap-3 pt-1">
               <button
                 type="submit"
                 disabled={isProcessing || !rawText.trim()}
-                className="pixel-btn pixel-btn-primary"
+                className="px-5 py-2.5 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-500 text-white shadow-lg shadow-indigo-950/40 flex items-center gap-2 active:scale-95 transition-all disabled:opacity-50"
               >
-                {isProcessing ? 'PROCESANDO...' : 'PROBAR Y REGISTRAR'}
+                <Send className="w-3.5 h-3.5" />
+                <span>{isProcessing ? 'Procesando...' : 'Extraer y Registrar'}</span>
               </button>
             </div>
           </form>
         )}
 
-        {/* Tab 3: Supported Banks */}
+        {/* TAB 3: SUPPORTED BANKS */}
         {activeTab === 'banks' && (
-          <div className="space-y-3 font-pixel text-[9px]">
-            {supportedBanks.map((b) => (
-              <div key={b.name} className="p-3 bg-black border-2 border-[#3b3b77] space-y-1">
+          <div className="mt-5 space-y-3 animate-fade-in">
+            {supportedBanks.map((b, i) => (
+              <div
+                key={i}
+                className="p-3.5 rounded-2xl bg-slate-950/70 border border-slate-800 space-y-2"
+              >
                 <div className="flex items-center justify-between">
-                  <span className="font-bold text-white" style={{ color: b.color }}>
-                    {b.name}
-                  </span>
-                  <span className="text-slate-400 font-mono text-[8px]">{b.email}</span>
+                  <div className="flex items-center gap-2">
+                    <span className={`text-xs font-bold px-2.5 py-0.5 rounded-md border ${b.color}`}>
+                      {b.badge}
+                    </span>
+                    <span className="text-xs font-bold text-white">{b.name}</span>
+                  </div>
+                  <span className="text-[11px] font-mono text-emerald-400">{b.email}</span>
                 </div>
-                <div className="p-2 bg-[#111132] border border-slate-700 font-vt text-xs text-slate-300">
+                <div className="p-2 rounded-lg bg-slate-900 border border-slate-800/80 text-[11px] font-mono text-slate-400">
+                  <span className="text-slate-500 block mb-0.5">Formato compatible:</span>
                   {b.sample}
                 </div>
               </div>
             ))}
           </div>
         )}
+
       </div>
     </div>
   );

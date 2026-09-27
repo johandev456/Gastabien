@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X } from 'lucide-react';
+import { X, PlusCircle, TrendingUp, TrendingDown, Sparkles } from 'lucide-react';
 import { BankCode, Category } from '../types';
 
 interface AddTransactionModalProps {
@@ -82,6 +82,7 @@ export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({
       notes
     });
 
+    // Reset and close
     setMerchant('');
     setAmount('');
     setNotes('');
@@ -96,43 +97,51 @@ export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-sm">
-      <div className="retro-box w-full max-w-md p-5 sm:p-6 relative max-h-[90vh] overflow-y-auto">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-fade-in">
+      <div className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-md p-6 shadow-2xl relative">
+        
         {/* Header */}
-        <div className="flex items-center justify-between pb-3 border-b-2 border-dashed border-[#444477]">
-          <div>
-            <h3 className="font-pixel text-xs sm:text-sm text-[#ffd700] pixel-text-shadow">
-              {type === 'INCOME' ? '★ [NUEVO INGRESO / LOOT]' : '▼ [NUEVO GASTO / HIT]'}
-            </h3>
-            <p className="font-vt text-sm text-[#00ffff] mt-0.5">
-              {type === 'INCOME' ? 'Suma directa a tu balance general' : 'Salida de dinero manual'}
-            </p>
+        <div className="flex items-center justify-between pb-4 border-b border-slate-800">
+          <div className="flex items-center gap-2.5">
+            <div className={`p-2 rounded-xl ${type === 'INCOME' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-rose-500/20 text-rose-400'}`}>
+              {type === 'INCOME' ? <TrendingUp className="w-5 h-5" /> : <TrendingDown className="w-5 h-5" />}
+            </div>
+            <div>
+              <h3 className="text-lg font-bold text-white">
+                {type === 'INCOME' ? 'Registrar Ingreso / Nómina' : 'Registrar Gasto Manual'}
+              </h3>
+              <p className="text-xs text-slate-400">
+                {type === 'INCOME' ? 'Suma directa a tu balance neto' : 'Salida de dinero manual'}
+              </p>
+            </div>
           </div>
           <button
             onClick={onClose}
-            className="p-1 text-slate-400 hover:text-white border-2 border-transparent hover:border-[#ffd700]"
+            className="p-1 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition-all"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
         {/* Form */}
-        <form onSubmit={handleSubmit} className="mt-4 space-y-3.5 font-pixel text-[9px]">
+        <form onSubmit={handleSubmit} className="mt-4 space-y-4">
+          
           {/* Type selector */}
-          <div className="grid grid-cols-2 gap-2 p-1 bg-black border-2 border-[#3b3b77]">
+          <div className="grid grid-cols-2 gap-2 p-1 bg-slate-950 rounded-xl border border-slate-800">
             <button
               type="button"
               onClick={() => {
                 setType('EXPENSE');
                 if (category === 'Ingresos y Nómina') setCategory('Supermercados');
               }}
-              className={`py-2 text-[9px] font-bold transition-all flex items-center justify-center gap-1 border ${
+              className={`py-2 text-xs font-semibold rounded-lg transition-all flex items-center justify-center gap-1.5 ${
                 type === 'EXPENSE'
-                  ? 'bg-[#ff3344] text-black border-black shadow-[2px_2px_0px_#000]'
-                  : 'text-slate-400 border-transparent hover:text-white'
+                  ? 'bg-rose-600 text-white shadow'
+                  : 'text-slate-400 hover:text-white'
               }`}
             >
-              <span>▼ GASTO (-)</span>
+              <TrendingDown className="w-3.5 h-3.5" />
+              <span>Gasto (-)</span>
             </button>
             <button
               type="button"
@@ -141,41 +150,44 @@ export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({
                 setCategory('Ingresos y Nómina');
                 if (!merchant) setMerchant('Nómina Quincenal');
               }}
-              className={`py-2 text-[9px] font-bold transition-all flex items-center justify-center gap-1 border ${
+              className={`py-2 text-xs font-semibold rounded-lg transition-all flex items-center justify-center gap-1.5 ${
                 type === 'INCOME'
-                  ? 'bg-[#39ff14] text-black border-black shadow-[2px_2px_0px_#000]'
-                  : 'text-slate-400 border-transparent hover:text-white'
+                  ? 'bg-emerald-600 text-white shadow'
+                  : 'text-slate-400 hover:text-white'
               }`}
             >
-              <span>▲ INGRESO (+)</span>
+              <TrendingUp className="w-3.5 h-3.5" />
+              <span>Ingreso (+)</span>
             </button>
           </div>
 
           {/* Quick Payday Shortcuts for Income */}
           {type === 'INCOME' && (
-            <div className="p-2 bg-black border-2 border-[#ffcc00] space-y-1">
-              <span className="text-[8px] text-[#ffcc00]">★ PRESETS DE NÓMINA RD:</span>
-              <div className="flex flex-wrap gap-1.5 font-pixel text-[8px]">
+            <div className="p-2.5 rounded-2xl bg-emerald-950/40 border border-emerald-800/40 space-y-1.5">
+              <span className="text-[11px] font-bold text-emerald-400 flex items-center gap-1">
+                <Sparkles className="w-3 h-3" /> Accesos rápidos de nómina:
+              </span>
+              <div className="flex flex-wrap gap-1.5">
                 <button
                   type="button"
                   onClick={() => setIncomePreset('Nómina Quincenal (Día 15)')}
-                  className="px-2 py-1 bg-[#222255] hover:bg-[#333377] text-[#39ff14] border border-[#39ff14]"
+                  className="px-2.5 py-1 rounded-lg bg-emerald-900/60 hover:bg-emerald-800 text-emerald-200 text-[11px] font-semibold border border-emerald-700/50 transition-all"
                 >
-                  DÍA 15
+                  Día 15 (Quincena)
                 </button>
                 <button
                   type="button"
                   onClick={() => setIncomePreset('Nómina Quincenal (Día 30)')}
-                  className="px-2 py-1 bg-[#222255] hover:bg-[#333377] text-[#39ff14] border border-[#39ff14]"
+                  className="px-2.5 py-1 rounded-lg bg-emerald-900/60 hover:bg-emerald-800 text-emerald-200 text-[11px] font-semibold border border-emerald-700/50 transition-all"
                 >
-                  DÍA 30
+                  Día 30 (Fin de Mes)
                 </button>
                 <button
                   type="button"
                   onClick={() => setIncomePreset('Transferencia Recibida')}
-                  className="px-2 py-1 bg-[#222255] hover:bg-[#333377] text-[#00ffff] border border-[#00ffff]"
+                  className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-[11px] font-medium border border-slate-700 transition-all"
                 >
-                  TRANSFERENCIA
+                  Transferencia
                 </button>
               </div>
             </div>
@@ -183,22 +195,24 @@ export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({
 
           {/* Merchant / Concept */}
           <div>
-            <label className="block text-[#00ffff] mb-1">
-              {type === 'INCOME' ? 'CONCEPTO / ORIGEN:' : 'COMERCIO / CONCEPTO:'}
+            <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">
+              {type === 'INCOME' ? 'Concepto del Ingreso' : 'Comercio / Descripción'}
             </label>
             <input
               type="text"
               required
-              placeholder={type === 'INCOME' ? 'Ej. Nómina Quincenal...' : 'Ej. Supermercado Bravo...'}
+              placeholder={type === 'INCOME' ? 'Ej. Nómina Quincenal Promerica, Sueldo...' : 'Ej. Sirena Churchill, Texaco...'}
               value={merchant}
               onChange={(e) => setMerchant(e.target.value)}
-              className="w-full bg-black border-2 border-[#3b3b77] focus:border-[#ffd700] px-3 py-2 text-white placeholder-slate-600 font-pixel text-[9px] outline-none"
+              className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 transition-all"
             />
           </div>
 
           {/* Amount */}
           <div>
-            <label className="block text-[#00ffff] mb-1">MONTO (RD$):</label>
+            <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">
+              Monto (RD$)
+            </label>
             <input
               type="number"
               step="0.01"
@@ -206,73 +220,83 @@ export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({
               placeholder="0.00"
               value={amount}
               onChange={(e) => setAmount(e.target.value)}
-              className="w-full bg-black border-2 border-[#3b3b77] focus:border-[#39ff14] px-3 py-2 text-[#39ff14] placeholder-slate-600 font-pixel text-[11px] outline-none"
+              className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 transition-all font-mono text-base"
             />
           </div>
 
-          {/* Bank selector */}
-          <div>
-            <label className="block text-[#00ffff] mb-1">BANCO / CUENTA:</label>
-            <select
-              value={bank}
-              onChange={(e) => setBank(e.target.value as BankCode)}
-              className="w-full bg-black border-2 border-[#3b3b77] focus:border-[#ffd700] px-3 py-2 text-[#ffcc00] font-pixel text-[9px] outline-none"
-            >
-              <option value="PROMERICA">BANCO PROMERICA</option>
-              <option value="POPULAR">BANCO POPULAR</option>
-              <option value="BHD">BANCO BHD</option>
-              <option value="QIK">QIK BANCO DIGITAL</option>
-              <option value="MANUAL">OTRO / EFECTIVO</option>
-            </select>
-          </div>
-
-          {/* Category selector (for Expense) */}
-          {type === 'EXPENSE' && (
+          {/* Category & Bank Grid */}
+          <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-[#00ffff] mb-1">CATEGORÍA:</label>
+              <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">
+                Categoría
+              </label>
               <select
                 value={category}
+                disabled={type === 'INCOME'}
                 onChange={(e) => setCategory(e.target.value as Category)}
-                className="w-full bg-black border-2 border-[#3b3b77] focus:border-[#ffd700] px-3 py-2 text-white font-pixel text-[8px] outline-none"
+                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-xs text-slate-200 focus:outline-none focus:border-emerald-500 disabled:opacity-75"
               >
-                {CATEGORIES.filter((c) => c !== 'Ingresos y Nómina').map((cat) => (
-                  <option key={cat} value={cat}>
-                    {cat.toUpperCase()}
-                  </option>
+                {CATEGORIES.map(c => (
+                  <option key={c} value={c}>{c}</option>
                 ))}
               </select>
             </div>
-          )}
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">
+                Banco / Cuenta
+              </label>
+              <select
+                value={bank}
+                onChange={(e) => setBank(e.target.value as BankCode)}
+                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-xs text-slate-200 focus:outline-none focus:border-emerald-500"
+              >
+                <option value="PROMERICA">Banco Promerica</option>
+                <option value="POPULAR">Banco Popular</option>
+                <option value="BHD">Banco BHD</option>
+                <option value="QIK">Qik Banco Digital</option>
+                <option value="MANUAL">Efectivo / Manual</option>
+              </select>
+            </div>
+          </div>
 
           {/* Notes */}
           <div>
-            <label className="block text-slate-400 mb-1">NOTAS / REFERENCIA (OPCIONAL):</label>
+            <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">
+              Notas adicionales (opcional)
+            </label>
             <input
               type="text"
-              placeholder="Ej. Quincena de septiembre, combustible..."
+              placeholder="Nota personal o detalle del depósito"
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
-              className="w-full bg-black border-2 border-[#3b3b77] px-3 py-2 text-slate-300 placeholder-slate-600 font-pixel text-[8px] outline-none"
+              className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500"
             />
           </div>
 
           {/* Submit */}
-          <div className="pt-2 flex justify-end space-x-2">
+          <div className="pt-2 flex items-center justify-end gap-3">
             <button
               type="button"
               onClick={onClose}
-              className="pixel-btn pixel-btn-dark"
+              className="px-4 py-2 text-xs font-semibold text-slate-400 hover:text-white transition-all"
             >
-              CANCELAR
+              Cancelar
             </button>
             <button
               type="submit"
-              className={type === 'INCOME' ? 'pixel-btn pixel-btn-primary' : 'pixel-btn pixel-btn-coin'}
+              className={`px-5 py-2.5 rounded-xl text-xs font-bold text-white shadow-lg active:scale-95 transition-all ${
+                type === 'INCOME'
+                  ? 'bg-emerald-600 hover:bg-emerald-500 shadow-emerald-950/40'
+                  : 'bg-indigo-600 hover:bg-indigo-500 shadow-indigo-950/40'
+              }`}
             >
-              {type === 'INCOME' ? '+ GUARDAR INGRESO' : '▼ GUARDAR GASTO'}
+              {type === 'INCOME' ? 'Guardar Ingreso' : 'Guardar Gasto'}
             </button>
           </div>
+
         </form>
+
       </div>
     </div>
   );
