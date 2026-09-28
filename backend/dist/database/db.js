@@ -17,7 +17,9 @@ let memoryDb = {
     sync_logs: [],
     reconciled_periods: [],
     ignored_external_ids: {},
-    oauth_config: undefined
+    oauth_config: undefined,
+    two_factor_auth: undefined,
+    device_sessions: {}
 };
 function saveDatabase() {
     try {
@@ -46,7 +48,9 @@ function initDatabase() {
                 sync_logs: loaded.sync_logs || [],
                 reconciled_periods: loaded.reconciled_periods || [],
                 ignored_external_ids: loaded.ignored_external_ids || {},
-                oauth_config: loaded.oauth_config || undefined
+                oauth_config: loaded.oauth_config || undefined,
+                two_factor_auth: loaded.two_factor_auth || undefined,
+                device_sessions: loaded.device_sessions || {}
             };
             // Re-categorize transactions with updated business rules
             let changed = false;
@@ -403,5 +407,80 @@ exports.dbOps = {
     },
     getGoogleConfig() {
         return memoryDb.oauth_config;
+    },
+    getTwoFactorAuth() {
+        return memoryDb.two_factor_auth || null;
+    },
+    saveTwoFactorAuth(secret, backupCodes, enabled = true) {
+        const config = {
+            secret,
+            enabled,
+            backupCodes,
+            createdAt: memoryDb.two_factor_auth?.createdAt || new Date().toISOString(),
+            updatedAt: new Date().toISOString()
+        };
+        memoryDb.two_factor_auth = config;
+        saveDatabase();
+        return config;
+    },
+    disableTwoFactorAuth() {
+        if (memoryDb.two_factor_auth) {
+            memoryDb.two_factor_auth.enabled = false;
+            memoryDb.two_factor_auth.updatedAt = new Date().toISOString();
+            saveDatabase();
+        }
+    },
+    verifyAndConsumeBackupCode(code) {
+        if (!memoryDb.two_factor_auth || !memoryDb.two_factor_auth.enabled)
+            return false;
+        const cleanCode = code.trim().toUpperCase();
+        const idx = memoryDb.two_factor_auth.backupCodes.findIndex(c => c.toUpperCase() === cleanCode);
+        if (idx !== -1) {
+            memoryDb.two_factor_auth.backupCodes.splice(idx, 1);
+            memoryDb.two_factor_auth.updatedAt = new Date().toISOString();
+            saveDatabase();
+            return true;
+        }
+        return false;
+    },
+    createDeviceSession(token, deviceId, userAgent) {
+        if (!memoryDb.device_sessions) {
+            memoryDb.device_sessions = {};
+        }
+        const session = {
+            token,
+            deviceId: deviceId || (0, uuid_1.v4)(),
+            createdAt: new Date().toISOString(),
+            lastUsedAt: new Date().toISOString(),
+            userAgent
+        };
+        memoryDb.device_sessions[token] = session;
+        saveDatabase();
+        return session;
+    },
+    validateDeviceSession(token) {
+        if (!token || !memoryDb.device_sessions)
+            return false;
+        const session = memoryDb.device_sessions[token];
+        if (session) {
+            session.lastUsedAt = new Date().toISOString();
+            saveDatabase();
+            return true;
+        }
+        return false;
+    },
+    revokeDeviceSession(token) {
+        if (!token || !memoryDb.device_sessions)
+            return false;
+        if (memoryDb.device_sessions[token]) {
+            delete memoryDb.device_sessions[token];
+            saveDatabase();
+            return true;
+        }
+        return false;
+    },
+    revokeAllDeviceSessions() {
+        memoryDb.device_sessions = {};
+        saveDatabase();
     }
 };

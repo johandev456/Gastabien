@@ -7,6 +7,7 @@ interface NavbarProps {
   onOpenBanksModal: () => void;
   onOpenStatementModal: () => void;
   isGmailConnected?: boolean;
+  onLogout?: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -14,7 +15,8 @@ export const Navbar: React.FC<NavbarProps> = ({
   isSyncing,
   onOpenAddModal,
   onOpenBanksModal,
-  onOpenStatementModal
+  onOpenStatementModal,
+  onLogout
 }) => {
   return (
     <header className="sticky top-0 right-0 h-20 bg-surface/70 backdrop-blur-2xl z-30 border-b border-outline-variant/20 shadow-[0_1px_8px_rgba(0,0,0,0.06)] left-0">
@@ -117,8 +119,22 @@ export const Navbar: React.FC<NavbarProps> = ({
             className="w-9 h-9 rounded-full bg-primary flex items-center justify-center shadow-md hover:opacity-90 transition-opacity cursor-pointer shrink-0"
             title="Configuración de Bancos"
           >
-            <span className="material-symbols-outlined text-on-primary text-[18px]">person</span>
+            <span className="material-symbols-outlined text-on-primary text-[18px]">tune</span>
           </button>
+
+          {/* 2FA Shield & Logout */}
+          {onLogout && (
+            <button
+              onClick={onLogout}
+              type="button"
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-full bg-surface-container-high/80 hover:bg-error-container/20 hover:text-error hover:border-error/40 text-on-surface-variant font-body-sm text-[12px] transition-all shadow-[0_2px_8px_rgba(0,0,0,0.3)] border border-outline-variant/20 cursor-pointer"
+              title="Cerrar sesión 2FA en este dispositivo"
+            >
+              <span className="material-symbols-outlined text-[16px] text-secondary">verified_user</span>
+              <span className="hidden xl:inline">2FA</span>
+              <span className="material-symbols-outlined text-[16px]">logout</span>
+            </button>
+          )}
         </div>
       </div>
     </header>

@@ -15,12 +15,13 @@ const transactions_routes_1 = __importDefault(require("./routes/transactions.rou
 const analytics_routes_1 = __importDefault(require("./routes/analytics.routes"));
 const banks_routes_1 = __importDefault(require("./routes/banks.routes"));
 const statement_routes_1 = __importDefault(require("./routes/statement.routes"));
+const auth_middleware_1 = require("./middleware/auth.middleware");
 const app = (0, express_1.default)();
 // Middleware
 app.use((0, cors_1.default)({
     origin: '*',
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'x-user-id', 'Bypass-Tunnel-Reminder', 'bypass-tunnel-reminder', '*']
+    allowedHeaders: ['Content-Type', 'Authorization', 'x-user-id', 'x-device-token', 'x-client-platform', 'Bypass-Tunnel-Reminder', 'bypass-tunnel-reminder', '*']
 }));
 app.options('*', (0, cors_1.default)());
 app.use(express_1.default.json());
@@ -28,11 +29,11 @@ app.use(express_1.default.json());
 (0, db_1.initDatabase)();
 // Routes
 app.use('/api/auth', auth_routes_1.default);
-app.use('/api/sync', sync_routes_1.default);
-app.use('/api/transactions', transactions_routes_1.default);
-app.use('/api/analytics', analytics_routes_1.default);
-app.use('/api/banks', banks_routes_1.default);
-app.use('/api/statement', statement_routes_1.default);
+app.use('/api/sync', auth_middleware_1.require2FA, sync_routes_1.default);
+app.use('/api/transactions', auth_middleware_1.require2FA, transactions_routes_1.default);
+app.use('/api/analytics', auth_middleware_1.require2FA, analytics_routes_1.default);
+app.use('/api/banks', auth_middleware_1.require2FA, banks_routes_1.default);
+app.use('/api/statement', auth_middleware_1.require2FA, statement_routes_1.default);
 // Health check endpoint
 app.get('/api/health', (req, res) => {
     res.json({

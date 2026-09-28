@@ -8,10 +8,15 @@ import { AddTransactionModal } from './components/AddTransactionModal';
 import { BankConnectionModal } from './components/BankConnectionModal';
 import { StatementSyncModal } from './components/StatementSyncModal';
 import { BankFilterBar } from './components/BankFilterBar';
+import { TwoFactorLockScreen } from './components/TwoFactorLockScreen';
 import { ApiClient } from './api/client';
 import { AnalyticsSummary, Transaction, Category } from './types';
 
 export function App() {
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => ApiClient.hasSessionToken());
+  const [authChecking, setAuthChecking] = useState(true);
+  const [requires2FASetup, setRequires2FASetup] = useState(false);
+
   const [summary, setSummary] = useState<AnalyticsSummary | null>(null);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [selectedBanks, setSelectedBanks] = useState<string[]>([]);
@@ -32,7 +37,45 @@ export function App() {
     }, 4500);
   };
 
+  const checkAuth = async () => {
+    try {
+      const status = await ApiClient.get2FAStatus();
+      if (!status.is2FAEnabled || status.requiresSetup) {
+        setRequires2FASetup(true);
+        setIsAuthenticated(false);
+      } else if (status.isAuthenticated) {
+        setIsAuthenticated(true);
+        setRequires2FASetup(false);
+      } else {
+        setIsAuthenticated(false);
+        setRequires2FASetup(false);
+      }
+    } catch (err) {
+      console.error('Error checking 2FA status:', err);
+      setIsAuthenticated(false);
+    } finally {
+      setAuthChecking(false);
+    }
+  };
+
+  useEffect(() => {
+    checkAuth();
+
+    const handle2FARequired = () => {
+      setIsAuthenticated(false);
+      ApiClient.clearSessionToken();
+    };
+
+    window.addEventListener('gastabien:2fa_required', handle2FARequired);
+    return () => {
+      window.removeEventListener('gastabien:2fa_required', handle2FARequired);
+    };
+  }, []);
+
   const loadData = async (banksToFilter = selectedBanks) => {
+    if (!ApiClient.hasSessionToken() && !isAuthenticated) {
+      return;
+    }
     try {
       setLoading(true);
       const bankParam = banksToFilter.length === 1 && banksToFilter[0] !== 'ALL' ? (banksToFilter[0] as any) : undefined;
@@ -64,7 +107,9 @@ export function App() {
   };
 
   useEffect(() => {
-    loadData(selectedBanks);
+    if (isAuthenticated) {
+      loadData(selectedBanks);
+    }
 
     // Check for auth callback in URL
     const urlParams = new URLSearchParams(window.location.search);
@@ -75,17 +120,17 @@ export function App() {
       ApiClient.triggerResyncGmail()
         .then(res => {
           showToast('success', `¡Escaneo completado! ${res.newTransactionsCount} movimientos registrados.`);
-          loadData(selectedBanks);
+          if (isAuthenticated) loadData(selectedBanks);
         })
         .catch(err => {
           console.error(err);
-          loadData(selectedBanks);
+          if (isAuthenticated) loadData(selectedBanks);
         });
     } else if (urlParams.get('auth_error')) {
       showToast('error', `Error al vincular Gmail: ${urlParams.get('auth_error')}`);
       window.history.replaceState({}, document.title, window.location.pathname);
     }
-  }, [selectedBanks]);
+  }, [selectedBanks, isAuthenticated]);
 
   const handleToggleBank = (bankCode: string) => {
     let nextBanks: string[];
@@ -171,6 +216,48 @@ export function App() {
     }
   };
 
+  const handleLogout = async () => {
+    try {
+      await ApiClient.logout2FA();
+    } catch (e) {
+      console.error('Logout error:', e);
+    }
+    setIsAuthenticated(false);
+    showToast('success', 'Sesión 2FA cerrada correctamente.');
+  };
+
+  // 1. Splash Screen while checking initial 2FA authentication
+  if (authChecking) {
+    return (
+      <div className="min-h-screen bg-[#10131A] flex flex-col items-center justify-center relative overflow-hidden">
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-primary-container/15 rounded-full blur-[120px] pointer-events-none" />
+        <div className="flex flex-col items-center gap-4 relative z-10">
+          <div className="w-14 h-14 rounded-full bg-gradient-to-tr from-primary-container via-primary to-secondary flex items-center justify-center shadow-[0_4px_24px_rgba(62,144,255,0.4)] animate-pulse">
+            <span className="material-symbols-outlined text-white text-[28px]">account_balance_wallet</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="w-2 h-2 rounded-full bg-primary animate-ping" />
+            <span className="text-sm font-medium text-slate-300">Verificando sesión segura...</span>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // 2. Strict 2FA Authentication Gate Lock Screen
+  if (!isAuthenticated) {
+    return (
+      <TwoFactorLockScreen
+        requiresSetup={requires2FASetup}
+        onAuthenticated={() => {
+          setIsAuthenticated(true);
+          setRequires2FASetup(false);
+          loadData(selectedBanks);
+        }}
+      />
+    );
+  }
+
   return (
     <div className="bg-background font-body-md text-on-surface min-h-screen relative overflow-x-hidden selection:bg-primary-container selection:text-on-primary-container">
       {/* Ambient Background Glow Blobs */}
@@ -207,6 +294,7 @@ export function App() {
         onOpenBanksModal={() => setIsBanksModalOpen(true)}
         onOpenStatementModal={() => setIsStatementModalOpen(true)}
         isGmailConnected={isGmailConnected}
+        onLogout={handleLogout}
       />
 
       {/* Main Dashboard Container */}

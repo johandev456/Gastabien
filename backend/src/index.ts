@@ -11,6 +11,7 @@ import analyticsRoutes from './routes/analytics.routes';
 import banksRoutes from './routes/banks.routes';
 import statementRoutes from './routes/statement.routes';
 import { syncService } from './services/sync.service';
+import { require2FA } from './middleware/auth.middleware';
 
 const app = express();
 
@@ -18,7 +19,7 @@ const app = express();
 app.use(cors({
   origin: '*',
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'x-user-id', 'Bypass-Tunnel-Reminder', 'bypass-tunnel-reminder', '*']
+  allowedHeaders: ['Content-Type', 'Authorization', 'x-user-id', 'x-device-token', 'x-client-platform', 'Bypass-Tunnel-Reminder', 'bypass-tunnel-reminder', '*']
 }));
 app.options('*', cors());
 app.use(express.json());
@@ -28,11 +29,11 @@ initDatabase();
 
 // Routes
 app.use('/api/auth', authRoutes);
-app.use('/api/sync', syncRoutes);
-app.use('/api/transactions', transactionsRoutes);
-app.use('/api/analytics', analyticsRoutes);
-app.use('/api/banks', banksRoutes);
-app.use('/api/statement', statementRoutes);
+app.use('/api/sync', require2FA, syncRoutes);
+app.use('/api/transactions', require2FA, transactionsRoutes);
+app.use('/api/analytics', require2FA, analyticsRoutes);
+app.use('/api/banks', require2FA, banksRoutes);
+app.use('/api/statement', require2FA, statementRoutes);
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {
