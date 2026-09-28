@@ -3,12 +3,17 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.require2FA = require2FA;
 const db_1 = require("../database/db");
 function require2FA(req, res, next) {
-    // Check Android/local development bypass header if present
-    if (req.headers['x-client-platform'] === 'gastabien-android') {
+    const userAgent = (req.headers['user-agent'] || '').toLowerCase();
+    const isAndroidClient = req.headers['x-client-platform'] === 'gastabien-android' ||
+        req.headers['x-requested-with'] === 'com.gastabien.app' ||
+        userAgent.includes('okhttp') ||
+        userAgent.includes('dalvik');
+    // Allow native mobile app requests
+    if (isAndroidClient) {
         return next();
     }
     const twoFactor = db_1.dbOps.getTwoFactorAuth();
-    // If 2FA is not yet configured, block protected data access until setup is completed
+    // If 2FA is not yet configured, block protected data access on web until setup is completed
     if (!twoFactor || !twoFactor.enabled) {
         return res.status(401).json({
             error: '2FA_REQUIRED',
@@ -26,10 +31,6 @@ function require2FA(req, res, next) {
     }
     else if (req.query.device_token) {
         token = req.query.device_token.trim();
-    }
-    // Check Android/local development bypass header if present
-    if (req.headers['x-client-platform'] === 'gastabien-android') {
-        return next();
     }
     if (token && db_1.dbOps.validateDeviceSession(token)) {
         return next();

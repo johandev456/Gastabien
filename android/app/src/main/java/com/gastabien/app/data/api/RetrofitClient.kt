@@ -29,6 +29,7 @@ object RetrofitClient {
                 .addInterceptor { chain ->
                     val request = chain.request().newBuilder()
                         .addHeader("Bypass-Tunnel-Reminder", "true")
+                        .addHeader("x-client-platform", "gastabien-android")
                         .build()
                     chain.proceed(request)
                 }
