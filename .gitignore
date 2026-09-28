@@ -8,11 +8,6 @@ web/dist/
 build/
 .output/
 
-# Local Data / Database Store
-backend/data/
-*.db
-*.sqlite
-
 # Logs
 npm-debug.log*
 yarn-debug.log*

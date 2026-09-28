@@ -14,14 +14,30 @@ import { AnalyticsSummary, Transaction, Category } from './types';
 
 export function App() {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => ApiClient.hasSessionToken());
-  const [authChecking, setAuthChecking] = useState(true);
+  const [authChecking, setAuthChecking] = useState(() => !ApiClient.hasSessionToken());
   const [requires2FASetup, setRequires2FASetup] = useState(false);
 
-  const [summary, setSummary] = useState<AnalyticsSummary | null>(null);
-  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [summary, setSummary] = useState<AnalyticsSummary | null>(() => {
+    try {
+      const cached = localStorage.getItem('gastabien_cached_summary');
+      return cached ? JSON.parse(cached) : null;
+    } catch {
+      return null;
+    }
+  });
+
+  const [transactions, setTransactions] = useState<Transaction[]>(() => {
+    try {
+      const cached = localStorage.getItem('gastabien_cached_transactions');
+      return cached ? JSON.parse(cached) : [];
+    } catch {
+      return [];
+    }
+  });
+
   const [selectedBanks, setSelectedBanks] = useState<string[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [addModalType, setAddModalType] = useState<'EXPENSE' | 'INCOME'>('EXPENSE');
@@ -50,9 +66,14 @@ export function App() {
         setIsAuthenticated(false);
         setRequires2FASetup(false);
       }
-    } catch (err) {
-      console.error('Error checking 2FA status:', err);
-      setIsAuthenticated(false);
+    } catch (err: any) {
+      console.warn('Backend waking up or network unavailable during 2FA check:', err);
+      // If client already has a saved session token on this device, keep active while server wakes up
+      if (ApiClient.hasSessionToken()) {
+        setIsAuthenticated(true);
+      } else {
+        setIsAuthenticated(false);
+      }
     } finally {
       setAuthChecking(false);
     }
@@ -88,6 +109,9 @@ export function App() {
 
       if (sumRes.status === 'fulfilled') {
         setSummary(sumRes.value);
+        try {
+          localStorage.setItem('gastabien_cached_summary', JSON.stringify(sumRes.value));
+        } catch {}
       }
       if (txRes.status === 'fulfilled') {
         let list = txRes.value.transactions;
@@ -95,6 +119,11 @@ export function App() {
           list = list.filter(tx => banksToFilter.includes(tx.bank));
         }
         setTransactions(list);
+        if (banksToFilter.length === 0 || banksToFilter.includes('ALL')) {
+          try {
+            localStorage.setItem('gastabien_cached_transactions', JSON.stringify(list));
+          } catch {}
+        }
       }
       if (authRes.status === 'fulfilled') {
         setIsGmailConnected(authRes.value.user?.hasGmailConnected || false);

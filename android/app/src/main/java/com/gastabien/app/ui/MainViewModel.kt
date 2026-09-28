@@ -1,9 +1,11 @@
 package com.gastabien.app.ui
 
-import androidx.lifecycle.ViewModel
+import android.app.Application
+import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.gastabien.app.data.api.ApiService
 import com.gastabien.app.data.api.RetrofitClient
+import com.gastabien.app.data.local.LocalCache
 import com.gastabien.app.data.models.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -17,15 +19,21 @@ sealed class UiState<out T> {
     data class Error(val message: String) : UiState<Nothing>()
 }
 
-class MainViewModel : ViewModel() {
+class MainViewModel(application: Application) : AndroidViewModel(application) {
+
+    private val localCache = LocalCache(application.applicationContext)
 
     private val api: ApiService
         get() = RetrofitClient.apiService
 
-    private val _summaryState = MutableStateFlow<UiState<AnalyticsSummary>>(UiState.Loading)
+    private val _summaryState = MutableStateFlow<UiState<AnalyticsSummary>>(
+        localCache.getSavedSummary()?.let { UiState.Success(it) } ?: UiState.Loading
+    )
     val summaryState: StateFlow<UiState<AnalyticsSummary>> = _summaryState.asStateFlow()
 
-    private val _transactionsState = MutableStateFlow<UiState<List<Transaction>>>(UiState.Loading)
+    private val _transactionsState = MutableStateFlow<UiState<List<Transaction>>>(
+        localCache.getSavedTransactions()?.let { UiState.Success(it) } ?: UiState.Loading
+    )
     val transactionsState: StateFlow<UiState<List<Transaction>>> = _transactionsState.asStateFlow()
 
     private val _selectedBank = MutableStateFlow("ALL")
@@ -67,12 +75,25 @@ class MainViewModel : ViewModel() {
 
     fun loadSummary(bank: String? = if (_selectedBank.value == "ALL") null else _selectedBank.value) {
         viewModelScope.launch {
-            _summaryState.value = UiState.Loading
+            if (_summaryState.value !is UiState.Success) {
+                _summaryState.value = UiState.Loading
+            }
             try {
                 val summary = api.getSummary(bank = bank)
                 _summaryState.value = UiState.Success(summary)
+                if (bank == null) {
+                    localCache.saveSummary(summary)
+                }
             } catch (e: Exception) {
-                _summaryState.value = UiState.Error(e.localizedMessage ?: "Error al cargar resumen")
+                // If we already have cached data, keep displaying it gracefully
+                if (_summaryState.value !is UiState.Success) {
+                    val fallback = localCache.getSavedSummary()
+                    if (fallback != null) {
+                        _summaryState.value = UiState.Success(fallback)
+                    } else {
+                        _summaryState.value = UiState.Error(e.localizedMessage ?: "Error al cargar resumen")
+                    }
+                }
             }
         }
     }
@@ -85,7 +106,9 @@ class MainViewModel : ViewModel() {
     ) {
         currentSearch = search
         viewModelScope.launch {
-            _transactionsState.value = UiState.Loading
+            if (_transactionsState.value !is UiState.Success) {
+                _transactionsState.value = UiState.Loading
+            }
             try {
                 val res = api.getTransactions(
                     bank = bank,
@@ -94,8 +117,19 @@ class MainViewModel : ViewModel() {
                     search = search
                 )
                 _transactionsState.value = UiState.Success(res.transactions)
+                if (bank == null && category == null && type == null && search == null) {
+                    localCache.saveTransactions(res.transactions)
+                }
             } catch (e: Exception) {
-                _transactionsState.value = UiState.Error(e.localizedMessage ?: "Error al cargar movimientos")
+                // If we already have cached data, keep displaying it gracefully
+                if (_transactionsState.value !is UiState.Success) {
+                    val fallback = localCache.getSavedTransactions()
+                    if (fallback != null) {
+                        _transactionsState.value = UiState.Success(fallback)
+                    } else {
+                        _transactionsState.value = UiState.Error(e.localizedMessage ?: "Error al cargar movimientos")
+                    }
+                }
             }
         }
     }

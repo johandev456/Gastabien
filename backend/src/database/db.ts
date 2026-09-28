@@ -66,6 +66,8 @@ interface DatabaseSchema {
 
 const DB_DIR = path.resolve(__dirname, '../../data');
 const DB_FILE = path.join(DB_DIR, 'gastabien_store.json');
+const SEED_FILE = path.join(__dirname, 'seed.json');
+const SEED_SRC_FILE = path.resolve(__dirname, '../../src/database/seed.json');
 
 let memoryDb: DatabaseSchema = {
   users: {},
@@ -84,50 +86,104 @@ function saveDatabase() {
       fs.mkdirSync(DB_DIR, { recursive: true });
     }
     const tempFile = `${DB_FILE}.tmp`;
-    fs.writeFileSync(tempFile, JSON.stringify(memoryDb, null, 2), 'utf-8');
+    const jsonStr = JSON.stringify(memoryDb, null, 2);
+    fs.writeFileSync(tempFile, jsonStr, 'utf-8');
     fs.renameSync(tempFile, DB_FILE);
+
+    // Also sync to seed files if writable for cold start resilience
+    try {
+      if (fs.existsSync(path.dirname(SEED_SRC_FILE))) {
+        fs.writeFileSync(SEED_SRC_FILE, jsonStr, 'utf-8');
+      }
+    } catch {
+      // Non-critical fallback
+    }
   } catch (err) {
     console.error('Error saving database:', err);
   }
 }
 
 export function initDatabase() {
+  let loadedData: DatabaseSchema | null = null;
+
   try {
     if (!fs.existsSync(DB_DIR)) {
       fs.mkdirSync(DB_DIR, { recursive: true });
     }
+
+    // 1. Primary: load from gastabien_store.json
     if (fs.existsSync(DB_FILE)) {
       const content = fs.readFileSync(DB_FILE, 'utf-8');
-      const loaded = JSON.parse(content);
-      memoryDb = {
-        users: loaded.users || {},
-        transactions: loaded.transactions || {},
-        sync_logs: loaded.sync_logs || [],
-        reconciled_periods: loaded.reconciled_periods || [],
-        ignored_external_ids: loaded.ignored_external_ids || {},
-        oauth_config: loaded.oauth_config || undefined,
-        two_factor_auth: loaded.two_factor_auth || undefined,
-        device_sessions: loaded.device_sessions || {}
-      };
-
-      // Re-categorize transactions with updated business rules
-      let changed = false;
-      for (const tx of Object.values(memoryDb.transactions)) {
-        if (!tx.isManual) {
-          const freshCategory = categorizationService.categorize(tx.merchant, tx.description, tx.type);
-          if (freshCategory !== tx.category) {
-            tx.category = freshCategory;
-            changed = true;
-          }
-        }
-      }
-      if (changed) {
-        saveDatabase();
-      }
+      loadedData = JSON.parse(content);
+      console.log(`[DATABASE] Cargado exitosamente desde ${DB_FILE}`);
+    } 
+    // 2. Secondary: fallback to bundled seed.json
+    else if (fs.existsSync(SEED_FILE)) {
+      const content = fs.readFileSync(SEED_FILE, 'utf-8');
+      loadedData = JSON.parse(content);
+      console.log(`[DATABASE] Cargado desde seed bundle: ${SEED_FILE}`);
+    } else if (fs.existsSync(SEED_SRC_FILE)) {
+      const content = fs.readFileSync(SEED_SRC_FILE, 'utf-8');
+      loadedData = JSON.parse(content);
+      console.log(`[DATABASE] Cargado desde seed fuente: ${SEED_SRC_FILE}`);
     }
   } catch (err) {
-    console.warn('Could not read existing database, initializing new memory database:', err);
-    memoryDb = { users: {}, transactions: {}, sync_logs: [], reconciled_periods: [], ignored_external_ids: {} };
+    console.warn('[DATABASE] Error leyendo archivos de almacenamiento, usando memoria base:', err);
+  }
+
+  // 3. Fallback to GASTABIEN_STORE_DATA environment variable if available
+  if (!loadedData && process.env.GASTABIEN_STORE_DATA) {
+    try {
+      loadedData = JSON.parse(process.env.GASTABIEN_STORE_DATA);
+      console.log('[DATABASE] Cargado desde variable de entorno GASTABIEN_STORE_DATA');
+    } catch (e) {
+      console.warn('Error parsing GASTABIEN_STORE_DATA env var:', e);
+    }
+  }
+
+  if (loadedData) {
+    memoryDb = {
+      users: loadedData.users || {},
+      transactions: loadedData.transactions || {},
+      sync_logs: loadedData.sync_logs || [],
+      reconciled_periods: loadedData.reconciled_periods || [],
+      ignored_external_ids: loadedData.ignored_external_ids || {},
+      oauth_config: loadedData.oauth_config || undefined,
+      two_factor_auth: loadedData.two_factor_auth || undefined,
+      device_sessions: loadedData.device_sessions || {}
+    };
+
+    // Re-categorize transactions with updated business rules
+    let changed = false;
+    for (const tx of Object.values(memoryDb.transactions)) {
+      if (!tx.isManual) {
+        const freshCategory = categorizationService.categorize(tx.merchant, tx.description, tx.type);
+        if (freshCategory !== tx.category) {
+          tx.category = freshCategory;
+          changed = true;
+        }
+      }
+    }
+    if (changed) {
+      saveDatabase();
+    }
+  }
+
+  // 4. Check for GASTABIEN_2FA_SECRET environment variable override
+  if (process.env.GASTABIEN_2FA_SECRET) {
+    const secret = process.env.GASTABIEN_2FA_SECRET.trim();
+    const backupCodes = process.env.GASTABIEN_2FA_BACKUP_CODES 
+      ? process.env.GASTABIEN_2FA_BACKUP_CODES.split(',').map(s => s.trim()) 
+      : (memoryDb.two_factor_auth?.backupCodes || ['FC16-A33C', 'CA48-F3DF', '127C-9D54', 'FABB-681B']);
+    
+    memoryDb.two_factor_auth = {
+      secret,
+      enabled: true,
+      backupCodes,
+      createdAt: memoryDb.two_factor_auth?.createdAt || new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+    console.log('[SECURITY] 2FA cargado y bloqueado desde variable de entorno GASTABIEN_2FA_SECRET');
   }
 
   // Ensure default demo user exists
@@ -138,6 +194,10 @@ export function initDatabase() {
       name: 'Usuario Demo RD',
       created_at: new Date().toISOString()
     };
+  }
+
+  // Save the database on disk if DB_FILE doesn't exist yet
+  if (!fs.existsSync(DB_FILE)) {
     saveDatabase();
   }
 }
