@@ -43,27 +43,38 @@ router.get('/2fa/status', (req, res) => {
   });
 });
 
-// Initialize / Request 2FA Setup
+// Initialize / Request 2FA Setup (Only allowed if not yet configured OR authorized)
 router.post('/2fa/setup', (req, res) => {
   try {
     const existing = dbOps.getTwoFactorAuth();
-    let secret: string;
-    let backupCodes: string[];
+    const authHeader = req.headers.authorization;
+    let token: string | undefined;
+
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      token = authHeader.substring(7).trim();
+    } else if (req.headers['x-device-token']) {
+      token = (req.headers['x-device-token'] as string).trim();
+    }
 
     if (existing && existing.enabled) {
-      // If already enabled, use existing secret or require verification
-      secret = existing.secret;
-      backupCodes = existing.backupCodes;
-    } else {
-      // Generate new secret & backup codes
-      secret = totpService.generateSecret(32);
-      backupCodes = totpService.generateBackupCodes(8);
-      pendingSetup = {
-        secret,
-        backupCodes,
-        createdAt: Date.now()
-      };
+      // If already enabled, only an already authenticated device can request setup/reconfiguration
+      if (!token || !dbOps.validateDeviceSession(token)) {
+        return res.status(403).json({
+          success: false,
+          error: '2FA_ALREADY_CONFIGURED',
+          message: 'El 2FA ya está activo y protegido exclusivamente para Johan. Introduce tu código de 6 dígitos para ingresar.'
+        });
+      }
     }
+
+    // Generate new secret & backup codes
+    const secret = totpService.generateSecret(32);
+    const backupCodes = totpService.generateBackupCodes(8);
+    pendingSetup = {
+      secret,
+      backupCodes,
+      createdAt: Date.now()
+    };
 
     const accountName = 'Johan';
     const issuer = 'GastaBien RD';

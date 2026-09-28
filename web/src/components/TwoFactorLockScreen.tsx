@@ -294,9 +294,9 @@ export function TwoFactorLockScreen({ onAuthenticated, requiresSetup: initialReq
               <div className="w-16 h-16 mx-auto rounded-2xl bg-gradient-to-tr from-cyan-500/20 to-emerald-500/20 border border-emerald-500/30 flex items-center justify-center shadow-xl shadow-black/50">
                 <Smartphone className="w-8 h-8 text-emerald-400" />
               </div>
-              <h2 className="text-2xl font-bold text-white tracking-tight">Verificación 2FA</h2>
+              <h2 className="text-2xl font-bold text-white tracking-tight">Acceso Privado de Johan</h2>
               <p className="text-xs text-slate-400 max-w-xs mx-auto">
-                Introduce el código de 6 dígitos generado por tu aplicación de autenticación.
+                Introduce el código de 6 dígitos generado por tu <strong className="text-slate-200">Google Authenticator</strong> o app 2FA para desbloquear.
               </p>
             </div>
 
@@ -369,7 +369,7 @@ export function TwoFactorLockScreen({ onAuthenticated, requiresSetup: initialReq
                 )}
               </button>
 
-              <div className="flex items-center justify-between text-xs text-slate-400 pt-2">
+              <div className="flex items-center justify-center text-xs text-slate-400 pt-2">
                 <button
                   type="button"
                   onClick={() => {
@@ -378,18 +378,7 @@ export function TwoFactorLockScreen({ onAuthenticated, requiresSetup: initialReq
                   }}
                   className="text-cyan-400 hover:text-cyan-300 font-medium transition-colors"
                 >
-                  {useBackupCode ? '← Usar app de autenticación' : '¿No tienes tu teléfono? Usar código'}
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsSetupMode(true);
-                    setError(null);
-                  }}
-                  className="text-slate-400 hover:text-slate-300 font-medium transition-colors"
-                >
-                  Reconfigurar 2FA
+                  {useBackupCode ? '← Usar app de autenticación (6 dígitos)' : '¿No tienes tu teléfono? Usar código de recuperación'}
                 </button>
               </div>
             </div>

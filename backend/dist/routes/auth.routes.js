@@ -35,27 +35,36 @@ router.get('/2fa/status', (req, res) => {
         backupCodesRemaining: twoFactor?.backupCodes?.length || 0
     });
 });
-// Initialize / Request 2FA Setup
+// Initialize / Request 2FA Setup (Only allowed if not yet configured OR authorized)
 router.post('/2fa/setup', (req, res) => {
     try {
         const existing = db_1.dbOps.getTwoFactorAuth();
-        let secret;
-        let backupCodes;
+        const authHeader = req.headers.authorization;
+        let token;
+        if (authHeader && authHeader.startsWith('Bearer ')) {
+            token = authHeader.substring(7).trim();
+        }
+        else if (req.headers['x-device-token']) {
+            token = req.headers['x-device-token'].trim();
+        }
         if (existing && existing.enabled) {
-            // If already enabled, use existing secret or require verification
-            secret = existing.secret;
-            backupCodes = existing.backupCodes;
+            // If already enabled, only an already authenticated device can request setup/reconfiguration
+            if (!token || !db_1.dbOps.validateDeviceSession(token)) {
+                return res.status(403).json({
+                    success: false,
+                    error: '2FA_ALREADY_CONFIGURED',
+                    message: 'El 2FA ya está activo y protegido exclusivamente para Johan. Introduce tu código de 6 dígitos para ingresar.'
+                });
+            }
         }
-        else {
-            // Generate new secret & backup codes
-            secret = totp_service_1.totpService.generateSecret(32);
-            backupCodes = totp_service_1.totpService.generateBackupCodes(8);
-            pendingSetup = {
-                secret,
-                backupCodes,
-                createdAt: Date.now()
-            };
-        }
+        // Generate new secret & backup codes
+        const secret = totp_service_1.totpService.generateSecret(32);
+        const backupCodes = totp_service_1.totpService.generateBackupCodes(8);
+        pendingSetup = {
+            secret,
+            backupCodes,
+            createdAt: Date.now()
+        };
         const accountName = 'Johan';
         const issuer = 'GastaBien RD';
         const otpAuthUrl = totp_service_1.totpService.getOtpAuthUrl(accountName, secret, issuer);
