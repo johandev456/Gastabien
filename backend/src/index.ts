@@ -24,42 +24,52 @@ app.use(cors({
 app.options('*', cors());
 app.use(express.json());
 
-// Initialize Database
-initDatabase();
+// Initialize Database and Start Server
+async function startServer() {
+  try {
+    await initDatabase();
+    console.log('✅ Base de datos inicializada.');
+  } catch (err) {
+    console.error('⚠️ Error al inicializar base de datos:', err);
+  }
 
-// Routes
-app.use('/api/auth', authRoutes);
-app.use('/api/sync', require2FA, syncRoutes);
-app.use('/api/transactions', require2FA, transactionsRoutes);
-app.use('/api/analytics', require2FA, analyticsRoutes);
-app.use('/api/banks', require2FA, banksRoutes);
-app.use('/api/statement', require2FA, statementRoutes);
+  // Routes
+  app.use('/api/auth', authRoutes);
+  app.use('/api/sync', require2FA, syncRoutes);
+  app.use('/api/transactions', require2FA, transactionsRoutes);
+  app.use('/api/analytics', require2FA, analyticsRoutes);
+  app.use('/api/banks', require2FA, banksRoutes);
+  app.use('/api/statement', require2FA, statementRoutes);
 
-// Health check endpoint
-app.get('/api/health', (req, res) => {
-  res.json({
-    status: 'online',
-    app: 'GastaBien API - Dominican Republic Bank Tracker',
-    version: '1.0.0',
-    supportedBanks: ['POPULAR', 'BHD', 'PROMERICA', 'QIK'],
-    time: new Date().toISOString()
+  // Health check endpoint
+  app.get('/api/health', (req, res) => {
+    res.json({
+      status: 'online',
+      app: 'GastaBien API - Dominican Republic Bank Tracker',
+      version: '1.0.0',
+      supportedBanks: ['POPULAR', 'BHD', 'PROMERICA', 'QIK'],
+      time: new Date().toISOString()
+    });
   });
-});
 
-// Serve frontend static build if present
-const webDistPath = path.resolve(__dirname, '../../web/dist');
-if (fs.existsSync(webDistPath)) {
-  app.use(express.static(webDistPath));
-  app.get('*', (req, res, next) => {
-    if (req.path.startsWith('/api')) {
-      return next();
-    }
-    res.sendFile(path.join(webDistPath, 'index.html'));
+  // Serve frontend static build if present
+  const webDistPath = path.resolve(__dirname, '../../web/dist');
+  if (fs.existsSync(webDistPath)) {
+    app.use(express.static(webDistPath));
+    app.get('*', (req, res, next) => {
+      if (req.path.startsWith('/api')) {
+        return next();
+      }
+      res.sendFile(path.join(webDistPath, 'index.html'));
+    });
+  }
+
+  const PORT = CONFIG.PORT;
+  app.listen(PORT, () => {
+    console.log(`🚀 GastaBien Backend Server running on http://localhost:${PORT}`);
+    console.log(`📊 Health check: http://localhost:${PORT}/api/health`);
   });
 }
 
-const PORT = CONFIG.PORT;
-app.listen(PORT, () => {
-  console.log(`🚀 GastaBien Backend Server running on http://localhost:${PORT}`);
-  console.log(`📊 Health check: http://localhost:${PORT}/api/health`);
-});
+startServer();
+

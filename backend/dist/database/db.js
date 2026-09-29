@@ -9,6 +9,7 @@ const path_1 = __importDefault(require("path"));
 const fs_1 = __importDefault(require("fs"));
 const uuid_1 = require("uuid");
 const categorization_service_1 = require("../services/categorization.service");
+const supabase_1 = require("./supabase");
 const DB_DIR = path_1.default.resolve(__dirname, '../../data');
 const DB_FILE = path_1.default.join(DB_DIR, 'gastabien_store.json');
 const SEED_FILE = path_1.default.join(__dirname, 'seed.json');
@@ -46,32 +47,50 @@ function saveDatabase() {
         console.error('Error saving database:', err);
     }
 }
-function initDatabase() {
+async function initDatabase() {
     let loadedData = null;
-    try {
-        if (!fs_1.default.existsSync(DB_DIR)) {
-            fs_1.default.mkdirSync(DB_DIR, { recursive: true });
+    // 1. Primary Cloud Store: Load from Supabase if configured
+    if ((0, supabase_1.isSupabaseConfigured)()) {
+        try {
+            console.log('[DATABASE] Verificando conexión y cargando datos desde Supabase Cloud...');
+            const supabaseData = await supabase_1.supabaseOps.loadAll();
+            if (supabaseData && (Object.keys(supabaseData.transactions).length > 0 || supabaseData.two_factor_auth)) {
+                loadedData = supabaseData;
+                console.log(`[DATABASE] ✅ Cargado exitosamente desde Supabase Cloud: ${Object.keys(supabaseData.transactions).length} transacciones.`);
+            }
+            else if (supabaseData) {
+                console.log('[DATABASE] Supabase conectado (inicialmente vacío).');
+            }
         }
-        // 1. Primary: load from gastabien_store.json
-        if (fs_1.default.existsSync(DB_FILE)) {
-            const content = fs_1.default.readFileSync(DB_FILE, 'utf-8');
-            loadedData = JSON.parse(content);
-            console.log(`[DATABASE] Cargado exitosamente desde ${DB_FILE}`);
-        }
-        // 2. Secondary: fallback to bundled seed.json
-        else if (fs_1.default.existsSync(SEED_FILE)) {
-            const content = fs_1.default.readFileSync(SEED_FILE, 'utf-8');
-            loadedData = JSON.parse(content);
-            console.log(`[DATABASE] Cargado desde seed bundle: ${SEED_FILE}`);
-        }
-        else if (fs_1.default.existsSync(SEED_SRC_FILE)) {
-            const content = fs_1.default.readFileSync(SEED_SRC_FILE, 'utf-8');
-            loadedData = JSON.parse(content);
-            console.log(`[DATABASE] Cargado desde seed fuente: ${SEED_SRC_FILE}`);
+        catch (err) {
+            console.error('[DATABASE] Error conectando a Supabase Cloud:', err);
         }
     }
-    catch (err) {
-        console.warn('[DATABASE] Error leyendo archivos de almacenamiento, usando memoria base:', err);
+    // 2. Secondary Local Store: Load from gastabien_store.json / seed.json
+    if (!loadedData) {
+        try {
+            if (!fs_1.default.existsSync(DB_DIR)) {
+                fs_1.default.mkdirSync(DB_DIR, { recursive: true });
+            }
+            if (fs_1.default.existsSync(DB_FILE)) {
+                const content = fs_1.default.readFileSync(DB_FILE, 'utf-8');
+                loadedData = JSON.parse(content);
+                console.log(`[DATABASE] Cargado exitosamente desde archivo local ${DB_FILE}`);
+            }
+            else if (fs_1.default.existsSync(SEED_FILE)) {
+                const content = fs_1.default.readFileSync(SEED_FILE, 'utf-8');
+                loadedData = JSON.parse(content);
+                console.log(`[DATABASE] Cargado desde seed bundle: ${SEED_FILE}`);
+            }
+            else if (fs_1.default.existsSync(SEED_SRC_FILE)) {
+                const content = fs_1.default.readFileSync(SEED_SRC_FILE, 'utf-8');
+                loadedData = JSON.parse(content);
+                console.log(`[DATABASE] Cargado desde seed fuente: ${SEED_SRC_FILE}`);
+            }
+        }
+        catch (err) {
+            console.warn('[DATABASE] Error leyendo archivos locales, usando memoria base:', err);
+        }
     }
     // 3. Fallback to GASTABIEN_STORE_DATA environment variable if available
     if (!loadedData && process.env.GASTABIEN_STORE_DATA) {
@@ -161,18 +180,21 @@ exports.dbOps = {
     upsertUser(user) {
         const existing = this.getUserByEmail(user.email);
         const now = new Date().toISOString();
+        let id;
         if (existing) {
             existing.name = user.name || existing.name;
             existing.google_refresh_token = user.refresh_token || existing.google_refresh_token;
             existing.google_access_token = user.access_token || existing.google_access_token;
             existing.token_expiry = user.token_expiry || existing.token_expiry;
             existing.last_sync_at = now;
+            id = existing.id;
             saveDatabase();
-            return existing.id;
+            supabase_1.supabaseOps.saveUser(existing).catch(() => { });
+            return id;
         }
         else {
-            const id = user.id || (0, uuid_1.v4)();
-            memoryDb.users[id] = {
+            id = user.id || (0, uuid_1.v4)();
+            const newUser = {
                 id,
                 email: user.email,
                 name: user.name,
@@ -182,7 +204,9 @@ exports.dbOps = {
                 created_at: now,
                 last_sync_at: now
             };
+            memoryDb.users[id] = newUser;
             saveDatabase();
+            supabase_1.supabaseOps.saveUser(newUser).catch(() => { });
             return id;
         }
     },
@@ -190,6 +214,7 @@ exports.dbOps = {
         if (memoryDb.users[userId]) {
             memoryDb.users[userId].last_sync_at = new Date().toISOString();
             saveDatabase();
+            supabase_1.supabaseOps.saveUser(memoryDb.users[userId]).catch(() => { });
         }
     },
     transactionExists(userId, externalId) {
@@ -204,12 +229,13 @@ exports.dbOps = {
             memoryDb.reconciled_periods = [];
         }
         const existingIdx = memoryDb.reconciled_periods.findIndex(p => p.userId === userId && p.bank === bank);
+        const now = new Date().toISOString();
         const newPeriod = {
             userId,
             bank,
             startDate,
             endDate,
-            reconciledAt: new Date().toISOString()
+            reconciledAt: now
         };
         if (existingIdx >= 0) {
             const old = memoryDb.reconciled_periods[existingIdx];
@@ -221,11 +247,13 @@ exports.dbOps = {
                 bank,
                 startDate: minStart,
                 endDate: maxEnd,
-                reconciledAt: new Date().toISOString()
+                reconciledAt: now
             };
+            supabase_1.supabaseOps.saveReconciledPeriod(userId, bank, minStart, maxEnd, now).catch(() => { });
         }
         else {
             memoryDb.reconciled_periods.push(newPeriod);
+            supabase_1.supabaseOps.saveReconciledPeriod(userId, bank, startDate, endDate, now).catch(() => { });
         }
         saveDatabase();
     },
@@ -256,6 +284,7 @@ exports.dbOps = {
         if (!memoryDb.ignored_external_ids[userId].includes(externalId)) {
             memoryDb.ignored_external_ids[userId].push(externalId);
             saveDatabase();
+            supabase_1.supabaseOps.saveIgnoredExternalId(userId, externalId).catch(() => { });
         }
     },
     isExternalIdIgnored(userId, externalId) {
@@ -317,6 +346,7 @@ exports.dbOps = {
                     tx.externalId = parsed.externalId;
                     tx.updatedAt = new Date().toISOString();
                     saveDatabase();
+                    supabase_1.supabaseOps.upsertTransaction(tx).catch(() => { });
                 }
                 return { isDuplicate: true, matchedTransactionId: tx.id, reason: 'SEMANTIC_MATCH' };
             }
@@ -359,6 +389,7 @@ exports.dbOps = {
         };
         memoryDb.transactions[id] = newTx;
         saveDatabase();
+        supabase_1.supabaseOps.upsertTransaction(newTx).catch(() => { });
         return newTx;
     },
     getTransactions(userId, filters) {
@@ -417,6 +448,7 @@ exports.dbOps = {
             tx.externalId = updates.externalId;
         tx.updatedAt = new Date().toISOString();
         saveDatabase();
+        supabase_1.supabaseOps.upsertTransaction(tx).catch(() => { });
         return true;
     },
     deleteTransaction(userId, id) {
@@ -425,6 +457,7 @@ exports.dbOps = {
             return false;
         delete memoryDb.transactions[id];
         saveDatabase();
+        supabase_1.supabaseOps.deleteTransaction(id).catch(() => { });
         return true;
     },
     logSync(userId, status, emailsProcessed, transactionsFound, errorMessage) {
@@ -442,6 +475,7 @@ exports.dbOps = {
             memoryDb.sync_logs = memoryDb.sync_logs.slice(0, 100);
         }
         saveDatabase();
+        supabase_1.supabaseOps.saveSyncLog(log).catch(() => { });
     },
     clearAllData(userId) {
         for (const [id, tx] of Object.entries(memoryDb.transactions)) {
@@ -457,10 +491,12 @@ exports.dbOps = {
             delete memoryDb.ignored_external_ids[userId];
         }
         saveDatabase();
+        supabase_1.supabaseOps.clearTransactions(userId).catch(() => { });
     },
     saveGoogleConfig(clientId, clientSecret, redirectUri) {
         memoryDb.oauth_config = { clientId, clientSecret, redirectUri };
         saveDatabase();
+        supabase_1.supabaseOps.saveGoogleConfig(clientId, clientSecret, redirectUri).catch(() => { });
     },
     getGoogleConfig() {
         return memoryDb.oauth_config;
@@ -478,6 +514,7 @@ exports.dbOps = {
         };
         memoryDb.two_factor_auth = config;
         saveDatabase();
+        supabase_1.supabaseOps.saveTwoFactor(secret, backupCodes, enabled).catch(() => { });
         return config;
     },
     disableTwoFactorAuth() {
@@ -485,12 +522,14 @@ exports.dbOps = {
             memoryDb.two_factor_auth.enabled = false;
             memoryDb.two_factor_auth.updatedAt = new Date().toISOString();
             saveDatabase();
+            supabase_1.supabaseOps.disableTwoFactor().catch(() => { });
         }
     },
     resetTwoFactorAuth() {
         memoryDb.two_factor_auth = undefined;
         memoryDb.device_sessions = {};
         saveDatabase();
+        supabase_1.supabaseOps.resetTwoFactor().catch(() => { });
     },
     verifyAndConsumeBackupCode(code) {
         if (!memoryDb.two_factor_auth || !memoryDb.two_factor_auth.enabled)
@@ -501,6 +540,7 @@ exports.dbOps = {
             memoryDb.two_factor_auth.backupCodes.splice(idx, 1);
             memoryDb.two_factor_auth.updatedAt = new Date().toISOString();
             saveDatabase();
+            supabase_1.supabaseOps.saveTwoFactor(memoryDb.two_factor_auth.secret, memoryDb.two_factor_auth.backupCodes, memoryDb.two_factor_auth.enabled).catch(() => { });
             return true;
         }
         return false;
@@ -509,15 +549,17 @@ exports.dbOps = {
         if (!memoryDb.device_sessions) {
             memoryDb.device_sessions = {};
         }
+        const devId = deviceId || (0, uuid_1.v4)();
         const session = {
             token,
-            deviceId: deviceId || (0, uuid_1.v4)(),
+            deviceId: devId,
             createdAt: new Date().toISOString(),
             lastUsedAt: new Date().toISOString(),
             userAgent
         };
         memoryDb.device_sessions[token] = session;
         saveDatabase();
+        supabase_1.supabaseOps.saveDeviceSession(token, devId, userAgent).catch(() => { });
         return session;
     },
     validateDeviceSession(token) {
@@ -537,6 +579,7 @@ exports.dbOps = {
         if (memoryDb.device_sessions[token]) {
             delete memoryDb.device_sessions[token];
             saveDatabase();
+            supabase_1.supabaseOps.revokeDeviceSession(token).catch(() => { });
             return true;
         }
         return false;
@@ -544,5 +587,6 @@ exports.dbOps = {
     revokeAllDeviceSessions() {
         memoryDb.device_sessions = {};
         saveDatabase();
+        supabase_1.supabaseOps.resetTwoFactor().catch(() => { });
     }
 };

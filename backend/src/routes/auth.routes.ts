@@ -261,6 +261,48 @@ router.get('/google/callback', async (req, res) => {
   }
 });
 
+// Check Supabase connection status
+router.get('/supabase/status', async (req, res) => {
+  const { isSupabaseConfigured, supabaseOps } = await import('../database/supabase');
+  const configured = isSupabaseConfigured();
+  if (!configured) {
+    return res.json({
+      configured: false,
+      connected: false,
+      message: 'Supabase no está configurado. Agrega SUPABASE_URL y SUPABASE_KEY en las variables de entorno.'
+    });
+  }
+
+  const test = await supabaseOps.testConnection();
+  return res.json({
+    configured: true,
+    connected: test.connected,
+    message: test.message
+  });
+});
+
+// Configure Supabase dynamically
+router.post('/supabase/config', async (req, res) => {
+  const { url, key } = req.body;
+  if (!url || !key) {
+    return res.status(400).json({ success: false, error: 'URL y KEY de Supabase son requeridos.' });
+  }
+
+  CONFIG.SUPABASE.URL = url.trim();
+  CONFIG.SUPABASE.KEY = key.trim();
+  process.env.SUPABASE_URL = url.trim();
+  process.env.SUPABASE_KEY = key.trim();
+
+  const { supabaseOps } = await import('../database/supabase');
+  const test = await supabaseOps.testConnection();
+  return res.json({
+    success: test.connected,
+    configured: true,
+    connected: test.connected,
+    message: test.message
+  });
+});
+
 // Check current user / Gmail connection status
 router.get('/status', (req, res) => {
   const userId = (req.headers['x-user-id'] as string) || (req.query.userId as string) || 'demo-user-id';
@@ -287,3 +329,4 @@ router.get('/status', (req, res) => {
 });
 
 export default router;
+
