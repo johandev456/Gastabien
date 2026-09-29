@@ -39,8 +39,23 @@ interface ApiService {
         @Header("x-user-id") userId: String = "demo-user-id"
     ): Map<String, Any>
 
+    @GET("api/auth/status")
+    suspend fun getAuthStatus(
+        @Header("x-user-id") userId: String = "demo-user-id"
+    ): AuthStatusResponse
+
+    @GET("api/auth/google/url")
+    suspend fun getGoogleAuthUrl(
+        @Header("x-user-id") userId: String = "demo-user-id"
+    ): GoogleAuthUrlResponse
+
     @POST("api/sync/gmail")
     suspend fun syncGmail(
+        @Header("x-user-id") userId: String = "demo-user-id"
+    ): SyncResponse
+
+    @POST("api/sync/resync")
+    suspend fun resyncGmail(
         @Header("x-user-id") userId: String = "demo-user-id"
     ): SyncResponse
 
@@ -48,6 +63,12 @@ interface ApiService {
     suspend fun simulateSync(
         @Header("x-user-id") userId: String = "demo-user-id"
     ): SyncResponse
+
+    @POST("api/sync/parse-raw")
+    suspend fun parseRawEmail(
+        @Body request: ParseRawEmailRequest,
+        @Header("x-user-id") userId: String = "demo-user-id"
+    ): ParseRawEmailResponse
 
     @POST("api/statement/sync")
     suspend fun syncStatement(

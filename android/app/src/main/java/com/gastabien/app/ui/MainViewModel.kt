@@ -50,7 +50,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _syncMessage = MutableStateFlow<String?>(null)
     val syncMessage: StateFlow<String?> = _syncMessage.asStateFlow()
 
+    private val _authStatus = MutableStateFlow<AuthStatusResponse?>(null)
+    val authStatus: StateFlow<AuthStatusResponse?> = _authStatus.asStateFlow()
+
     init {
+        loadAuthStatus()
         refreshAll()
     }
 
@@ -134,20 +138,113 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun syncEmails() {
+    fun loadAuthStatus() {
+        viewModelScope.launch {
+            try {
+                val status = api.getAuthStatus()
+                _authStatus.value = status
+            } catch (_: Exception) {}
+        }
+    }
+
+    fun getGoogleAuthUrl(onResult: (String?) -> Unit) {
+        viewModelScope.launch {
+            try {
+                val res = api.getGoogleAuthUrl()
+                onResult(res.url)
+            } catch (e: Exception) {
+                _syncMessage.value = "Error al obtener URL de Google: ${e.localizedMessage}"
+                onResult(null)
+            }
+        }
+    }
+
+    fun syncEmails(onRequiresConnection: (() -> Unit)? = null) {
         viewModelScope.launch {
             _isSyncing.value = true
             try {
                 val res = api.syncGmail()
-                if (res.newTransactionsCount > 0) {
-                    _syncMessage.value = "¡Sincronizado! Se agregaron ${res.newTransactionsCount} movimientos desde Gmail."
+                if (res.status == "SUCCESS") {
+                    if (res.newTransactionsCount > 0) {
+                        _syncMessage.value = "¡Gmail sincronizado! Se agregaron ${res.newTransactionsCount} movimientos de ${res.emailsProcessed} correos."
+                    } else {
+                        _syncMessage.value = "¡Todo al día! No hay nuevas transacciones (coinciden con tu estado de cuenta)."
+                    }
+                    loadAuthStatus()
+                    refreshAll()
                 } else {
-                    _syncMessage.value = "¡Todo al día! No hay nuevas transacciones tras el estado de cuenta."
+                    val errorMsg = res.error ?: "Error al sincronizar con Gmail"
+                    _syncMessage.value = errorMsg
+                    if (errorMsg.contains("no ha conectado", ignoreCase = true)) {
+                        onRequiresConnection?.invoke()
+                    }
+                    loadAuthStatus()
                 }
-                refreshAll()
             } catch (e: Exception) {
-                refreshAll()
-                _syncMessage.value = "Datos actualizados."
+                _syncMessage.value = "Error al conectar con el servidor: ${e.localizedMessage}"
+            } finally {
+                _isSyncing.value = false
+            }
+        }
+    }
+
+    fun resyncAllEmails() {
+        viewModelScope.launch {
+            _isSyncing.value = true
+            try {
+                val res = api.resyncGmail()
+                if (res.status == "SUCCESS") {
+                    _syncMessage.value = "¡Re-escaneo completo! Se procesaron ${res.emailsProcessed} correos (${res.newTransactionsCount} nuevos)."
+                    loadAuthStatus()
+                    refreshAll()
+                } else {
+                    _syncMessage.value = res.error ?: "Error al re-escanear Gmail"
+                }
+            } catch (e: Exception) {
+                _syncMessage.value = "Error al conectar: ${e.localizedMessage}"
+            } finally {
+                _isSyncing.value = false
+            }
+        }
+    }
+
+    fun simulateSync() {
+        viewModelScope.launch {
+            _isSyncing.value = true
+            try {
+                val res = api.simulateSync()
+                if (res.status == "SUCCESS") {
+                    _syncMessage.value = "¡Simulación completada! Se agregaron ${res.newTransactionsCount} movimientos bancarios de prueba."
+                    refreshAll()
+                } else {
+                    _syncMessage.value = res.error ?: "Error en la simulación"
+                }
+            } catch (e: Exception) {
+                _syncMessage.value = "Error al simular: ${e.localizedMessage}"
+            } finally {
+                _isSyncing.value = false
+            }
+        }
+    }
+
+    fun parseRawEmail(sender: String, subject: String, body: String, onResult: ((Boolean) -> Unit)? = null) {
+        viewModelScope.launch {
+            _isSyncing.value = true
+            try {
+                val res = api.parseRawEmail(ParseRawEmailRequest(sender = sender, subject = subject, body = body))
+                if (res.success) {
+                    val tx = res.transaction
+                    val txDetail = if (tx != null) " (RD$ ${tx.amount} en ${tx.merchant})" else ""
+                    _syncMessage.value = "¡Movimiento procesado con éxito!$txDetail"
+                    refreshAll()
+                    onResult?.invoke(true)
+                } else {
+                    _syncMessage.value = res.message
+                    onResult?.invoke(false)
+                }
+            } catch (e: Exception) {
+                _syncMessage.value = "Error al procesar texto: ${e.localizedMessage}"
+                onResult?.invoke(false)
             } finally {
                 _isSyncing.value = false
             }

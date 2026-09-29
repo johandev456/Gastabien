@@ -1,6 +1,7 @@
 package com.gastabien.app.ui.screens
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
@@ -17,13 +18,21 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.gastabien.app.data.models.AuthStatusResponse
 import com.gastabien.app.ui.theme.*
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun BanksScreen(
-    onSyncClick: () -> Unit
+    authStatus: AuthStatusResponse?,
+    isSyncing: Boolean,
+    onSyncClick: () -> Unit,
+    onOpenSyncDialog: () -> Unit,
+    onStatementClick: () -> Unit
 ) {
+    val isGmailConnected = authStatus?.user?.hasGmailConnected == true
+    val userEmail = authStatus?.user?.email ?: "usuario@gmail.com"
+
     val banks = listOf(
         BankItemData("Banco Popular Dominicano", "notificaciones@bpd.com.do", BankPopularAccent, "Popular", "Cuentas & Tarjetas Visa/MC"),
         BankItemData("Banco BHD", "alertas@bhd.com.do", BankBhdAccent, "BHD", "Alertas Pin Pesos & TC"),
@@ -93,35 +102,42 @@ fun BanksScreen(
                                         modifier = Modifier
                                             .size(42.dp)
                                             .clip(RoundedCornerShape(12.dp))
-                                            .background(ErrorColor.copy(alpha = 0.15f)),
+                                            .background(if (isGmailConnected) Secondary.copy(alpha = 0.15f) else ErrorColor.copy(alpha = 0.15f)),
                                         contentAlignment = Alignment.Center
                                     ) {
-                                        Icon(Icons.Default.Mail, contentDescription = null, tint = ErrorColor)
+                                        Icon(
+                                            Icons.Default.Mail,
+                                            contentDescription = null,
+                                            tint = if (isGmailConnected) Secondary else ErrorColor
+                                        )
                                     }
                                     Spacer(modifier = Modifier.width(12.dp))
                                     Column {
                                         Text(
-                                            text = "Google Gmail Conectado",
+                                            text = if (isGmailConnected) "Google Gmail Vinculado" else "Google Gmail No Conectado",
                                             fontSize = 15.sp,
                                             fontWeight = FontWeight.Bold,
                                             color = OnSurface
                                         )
                                         Text(
-                                            text = "Filtro activo para notificaciones bancarias",
-                                            fontSize = 12.sp,
-                                            color = Secondary
+                                            text = if (isGmailConnected) userEmail else "Requiere autorización OAuth para leer avisos bancarios",
+                                            fontSize = 11.sp,
+                                            color = if (isGmailConnected) Secondary else OnSurfaceVariant
                                         )
                                     }
                                 }
 
                                 Surface(
                                     shape = RoundedCornerShape(10.dp),
-                                    color = Secondary.copy(alpha = 0.15f),
-                                    border = androidx.compose.foundation.BorderStroke(1.dp, Secondary.copy(alpha = 0.25f))
+                                    color = if (isGmailConnected) Secondary.copy(alpha = 0.15f) else ErrorColor.copy(alpha = 0.15f),
+                                    border = androidx.compose.foundation.BorderStroke(
+                                        1.dp,
+                                        if (isGmailConnected) Secondary.copy(alpha = 0.25f) else ErrorColor.copy(alpha = 0.25f)
+                                    )
                                 ) {
                                     Text(
-                                        text = "ENCRIPTADO",
-                                        color = Secondary,
+                                        text = if (isGmailConnected) "ACTIVO" else "PENDIENTE",
+                                        color = if (isGmailConnected) Secondary else ErrorColor,
                                         fontSize = 10.sp,
                                         fontWeight = FontWeight.Bold,
                                         modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
@@ -131,16 +147,79 @@ fun BanksScreen(
 
                             Spacer(modifier = Modifier.height(14.dp))
 
-                            Button(
-                                onClick = onSyncClick,
-                                colors = ButtonDefaults.buttonColors(containerColor = SecondaryContainer),
-                                shape = RoundedCornerShape(12.dp),
-                                modifier = Modifier.fillMaxWidth()
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
-                                Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text("Sincronizar Correos de Bancos RD", fontWeight = FontWeight.Bold)
+                                Button(
+                                    onClick = onOpenSyncDialog,
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = if (isGmailConnected) SecondaryContainer else Primary
+                                    ),
+                                    shape = RoundedCornerShape(12.dp),
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    if (isSyncing) {
+                                        CircularProgressIndicator(modifier = Modifier.size(16.dp), color = Color.White, strokeWidth = 2.dp)
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text("Sincronizando...", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                    } else {
+                                        Icon(
+                                            if (isGmailConnected) Icons.Default.Refresh else Icons.Default.Link,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text(
+                                            if (isGmailConnected) "Sincronizar Correos" else "Vincular Gmail / Opciones",
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 12.sp
+                                        )
+                                    }
+                                }
                             }
+                        }
+                    }
+                }
+            }
+
+            // Quick Ingestion Cards
+            item {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Surface(
+                        shape = RoundedCornerShape(14.dp),
+                        color = SurfaceContainerLow.copy(alpha = 0.85f),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, OutlineVariant.copy(alpha = 0.25f)),
+                        modifier = Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(14.dp))
+                            .clickable { onStatementClick() }
+                    ) {
+                        Column(modifier = Modifier.padding(14.dp)) {
+                            Icon(Icons.Default.Description, contentDescription = null, tint = Primary, modifier = Modifier.size(22.dp))
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text("Estado de Cuenta", fontWeight = FontWeight.Bold, fontSize = 13.sp, color = OnSurface)
+                            Text("Conciliación y PDF / Texto", fontSize = 10.sp, color = OnSurfaceVariant)
+                        }
+                    }
+
+                    Surface(
+                        shape = RoundedCornerShape(14.dp),
+                        color = SurfaceContainerLow.copy(alpha = 0.85f),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, OutlineVariant.copy(alpha = 0.25f)),
+                        modifier = Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(14.dp))
+                            .clickable { onOpenSyncDialog() }
+                    ) {
+                        Column(modifier = Modifier.padding(14.dp)) {
+                            Icon(Icons.Default.ContentPaste, contentDescription = null, tint = Secondary, modifier = Modifier.size(22.dp))
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text("Pegar Notificación", fontWeight = FontWeight.Bold, fontSize = 13.sp, color = OnSurface)
+                            Text("SMS o aviso por email", fontSize = 10.sp, color = OnSurfaceVariant)
                         }
                     }
                 }
@@ -231,3 +310,4 @@ data class BankItemData(
     val tag: String,
     val description: String
 )
+

@@ -86,3 +86,35 @@ data class StatementSyncResponse(
     val message: String,
     val report: ReconciliationReport? = null
 )
+
+data class AuthUser(
+    val id: String,
+    val email: String,
+    val name: String,
+    val lastSyncAt: String? = null,
+    val hasGmailConnected: Boolean = false
+)
+
+data class AuthStatusResponse(
+    val connected: Boolean,
+    val user: AuthUser? = null,
+    val hasGoogleAuth: Boolean = false
+)
+
+data class GoogleAuthUrlResponse(
+    val configured: Boolean,
+    val url: String? = null,
+    val message: String? = null
+)
+
+data class ParseRawEmailRequest(
+    val sender: String,
+    val subject: String,
+    val body: String
+)
+
+data class ParseRawEmailResponse(
+    val success: Boolean,
+    val message: String,
+    val transaction: Transaction? = null
+)

@@ -1,5 +1,7 @@
 package com.gastabien.app
 
+import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
 import android.widget.Toast
 import androidx.activity.ComponentActivity
@@ -46,9 +48,11 @@ class MainActivity : ComponentActivity() {
                 val selectedCategory by viewModel.selectedCategory.collectAsState()
                 val isSyncing by viewModel.isSyncing.collectAsState()
                 val syncMessage by viewModel.syncMessage.collectAsState()
+                val authStatus by viewModel.authStatus.collectAsState()
 
                 var showAddDialog by remember { mutableStateOf(false) }
                 var showStatementDialog by remember { mutableStateOf(false) }
+                var showGmailSyncDialog by remember { mutableStateOf(false) }
                 var statementReport by remember { mutableStateOf<StatementSyncResponse?>(null) }
 
                 LaunchedEffect(syncMessage) {
@@ -117,7 +121,11 @@ class MainActivity : ComponentActivity() {
                                 selectedCategory = selectedCategory,
                                 onSelectCategory = { viewModel.selectCategory(it) },
                                 isSyncing = isSyncing,
-                                onSyncClick = { viewModel.syncEmails() },
+                                onSyncClick = {
+                                    viewModel.syncEmails(onRequiresConnection = {
+                                        showGmailSyncDialog = true
+                                    })
+                                },
                                 onStatementClick = { showStatementDialog = true },
                                 onAddClick = { showAddDialog = true }
                             )
@@ -145,7 +153,15 @@ class MainActivity : ComponentActivity() {
                         }
                         composable(BottomNavItem.Banks.route) {
                             BanksScreen(
-                                onSyncClick = { viewModel.syncEmails() }
+                                authStatus = authStatus,
+                                isSyncing = isSyncing,
+                                onSyncClick = {
+                                    viewModel.syncEmails(onRequiresConnection = {
+                                        showGmailSyncDialog = true
+                                    })
+                                },
+                                onOpenSyncDialog = { showGmailSyncDialog = true },
+                                onStatementClick = { showStatementDialog = true }
                             )
                         }
                     }
@@ -182,6 +198,34 @@ class MainActivity : ComponentActivity() {
                             },
                             isProcessing = isSyncing,
                             report = statementReport
+                        )
+                    }
+
+                    if (showGmailSyncDialog) {
+                        GmailSyncDialog(
+                            authStatus = authStatus,
+                            isSyncing = isSyncing,
+                            onDismiss = { showGmailSyncDialog = false },
+                            onConnectGoogle = {
+                                viewModel.getGoogleAuthUrl { url ->
+                                    if (!url.isNullOrBlank()) {
+                                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
+                                        startActivity(intent)
+                                    }
+                                }
+                            },
+                            onSyncNow = {
+                                viewModel.syncEmails()
+                            },
+                            onResyncAll = {
+                                viewModel.resyncAllEmails()
+                            },
+                            onSimulate = {
+                                viewModel.simulateSync()
+                            },
+                            onParseRaw = { sender, subject, body ->
+                                viewModel.parseRawEmail(sender, subject, body)
+                            }
                         )
                     }
                 }
