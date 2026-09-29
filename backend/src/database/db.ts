@@ -500,6 +500,7 @@ export const dbOps = {
     if (updates.category !== undefined) tx.category = updates.category;
     if (updates.merchant !== undefined) tx.merchant = updates.merchant;
     if (updates.amount !== undefined) tx.amount = updates.amount;
+    if (updates.currency !== undefined) tx.currency = updates.currency;
     if (updates.notes !== undefined) tx.notes = updates.notes;
     if (updates.type !== undefined) tx.type = updates.type;
     if (updates.date !== undefined) tx.date = updates.date;

@@ -139,7 +139,10 @@ class MainActivity : ComponentActivity() {
                                 onSelectCategory = { viewModel.selectCategory(it) },
                                 onDeleteClick = { id -> viewModel.deleteTransaction(id) },
                                 onCategoryChange = { id, cat -> viewModel.updateCategory(id, cat) },
-                                onSearchChange = { query -> viewModel.loadTransactions(search = query) }
+                                onSearchChange = { query -> viewModel.loadTransactions(search = query) },
+                                onUpdateTransaction = { id, amount, currency, category ->
+                                    viewModel.updateTransaction(id = id, amount = amount, currency = currency, category = category)
+                                }
                             )
                         }
                         composable(BottomNavItem.Categories.route) {

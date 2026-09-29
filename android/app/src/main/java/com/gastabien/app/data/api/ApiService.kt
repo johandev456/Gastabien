@@ -33,6 +33,13 @@ interface ApiService {
         @Header("x-user-id") userId: String = "demo-user-id"
     ): Transaction
 
+    @PUT("api/transactions/{id}")
+    suspend fun updateTransaction(
+        @Path("id") id: String,
+        @Body request: UpdateTransactionRequest,
+        @Header("x-user-id") userId: String = "demo-user-id"
+    ): Transaction
+
     @DELETE("api/transactions/{id}")
     suspend fun deleteTransaction(
         @Path("id") id: String,

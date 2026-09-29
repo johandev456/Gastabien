@@ -42,6 +42,16 @@ data class UpdateCategoryRequest(
     val category: String
 )
 
+data class UpdateTransactionRequest(
+    val amount: Double? = null,
+    val currency: String? = null,
+    val category: String? = null,
+    val merchant: String? = null,
+    val notes: String? = null,
+    val type: String? = null,
+    val date: String? = null
+)
+
 data class SyncResponse(
     val status: String,
     val emailsProcessed: Int,

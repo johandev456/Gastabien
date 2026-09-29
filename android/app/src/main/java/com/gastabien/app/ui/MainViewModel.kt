@@ -307,6 +307,25 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         refreshAll()
     }
 
+    fun updateTransaction(id: String, amount: Double? = null, currency: String? = null, category: String? = null) {
+        viewModelScope.launch {
+            try {
+                api.updateTransaction(
+                    id = id,
+                    request = UpdateTransactionRequest(
+                        amount = amount,
+                        currency = currency,
+                        category = category
+                    )
+                )
+                _syncMessage.value = "Movimiento actualizado con éxito"
+                refreshAll()
+            } catch (e: Exception) {
+                _syncMessage.value = "Error al actualizar: ${e.localizedMessage}"
+            }
+        }
+    }
+
     fun updateCategory(id: String, newCategory: String) {
         viewModelScope.launch {
             try {

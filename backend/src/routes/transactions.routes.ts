@@ -70,12 +70,13 @@ router.post('/', (req, res) => {
 // Update transaction
 router.put('/:id', (req, res) => {
   const userId = (req.headers['x-user-id'] as string) || req.body.userId || 'demo-user-id';
-  const { category, merchant, amount, notes, type, date } = req.body;
+  const { category, merchant, amount, currency, notes, type, date } = req.body;
 
   const success = dbOps.updateTransaction(userId, req.params.id, {
     category,
     merchant,
     amount: amount !== undefined ? parseFloat(amount) : undefined,
+    currency,
     notes,
     type,
     date
@@ -86,7 +87,7 @@ router.put('/:id', (req, res) => {
   }
 
   const updated = dbOps.getTransactionById(userId, req.params.id);
-  return res.json(updated);
+  return res.json(enrichTransaction(updated!));
 });
 
 // Delete all transactions for user

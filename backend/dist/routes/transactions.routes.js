@@ -60,11 +60,12 @@ router.post('/', (req, res) => {
 // Update transaction
 router.put('/:id', (req, res) => {
     const userId = req.headers['x-user-id'] || req.body.userId || 'demo-user-id';
-    const { category, merchant, amount, notes, type, date } = req.body;
+    const { category, merchant, amount, currency, notes, type, date } = req.body;
     const success = db_1.dbOps.updateTransaction(userId, req.params.id, {
         category,
         merchant,
         amount: amount !== undefined ? parseFloat(amount) : undefined,
+        currency,
         notes,
         type,
         date
@@ -73,7 +74,7 @@ router.put('/:id', (req, res) => {
         return res.status(404).json({ error: 'Transacción no encontrada o no pertenece al usuario' });
     }
     const updated = db_1.dbOps.getTransactionById(userId, req.params.id);
-    return res.json(updated);
+    return res.json((0, transaction_service_1.enrichTransaction)(updated));
 });
 // Delete all transactions for user
 router.delete('/', (req, res) => {

@@ -6,6 +6,7 @@ interface TransactionListProps {
   selectedCategory?: string | null;
   onSelectCategory?: (category: string | null) => void;
   onUpdateCategory: (id: string, newCategory: Category) => void;
+  onUpdateTransaction?: (id: string, updates: Partial<Transaction>) => void;
   onDelete: (id: string) => void;
   onClearAll?: () => void;
   loading?: boolean;
@@ -32,6 +33,7 @@ export const TransactionList: React.FC<TransactionListProps> = ({
   selectedCategory = null,
   onSelectCategory,
   onUpdateCategory,
+  onUpdateTransaction,
   onDelete,
   onClearAll,
   loading = false
@@ -42,6 +44,39 @@ export const TransactionList: React.FC<TransactionListProps> = ({
   const [showAllTable, setShowAllTable] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [tempCategory, setTempCategory] = useState<Category>('Otros Gastos');
+
+  // Edit Amount Modal State
+  const [editingTx, setEditingTx] = useState<Transaction | null>(null);
+  const [editAmountValue, setEditAmountValue] = useState<string>('');
+  const [editCurrencyValue, setEditCurrencyValue] = useState<'DOP' | 'USD'>('DOP');
+  const [editCategoryValue, setEditCategoryValue] = useState<Category>('Otros Gastos');
+
+  const handleOpenEdit = (tx: Transaction) => {
+    setEditingTx(tx);
+    setEditAmountValue(tx.amount.toString());
+    setEditCurrencyValue(tx.currency || 'DOP');
+    setEditCategoryValue(tx.category || 'Otros Gastos');
+  };
+
+  const handleSaveEdit = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!editingTx) return;
+    const num = parseFloat(editAmountValue);
+    if (isNaN(num) || num <= 0) {
+      alert('Por favor introduce un monto válido mayor a 0');
+      return;
+    }
+    if (onUpdateTransaction) {
+      onUpdateTransaction(editingTx.id, {
+        amount: num,
+        currency: editCurrencyValue,
+        category: editCategoryValue
+      });
+    } else if (onUpdateCategory && editCategoryValue !== editingTx.category) {
+      onUpdateCategory(editingTx.id, editCategoryValue);
+    }
+    setEditingTx(null);
+  };
 
   // Sync internal category with external prop
   useEffect(() => {
@@ -222,17 +257,26 @@ export const TransactionList: React.FC<TransactionListProps> = ({
                       <span className="material-symbols-outlined text-[14px]">check</span>
                       {isIncome ? 'Aplicado' : 'Validado'}
                     </span>
-                    <div className="flex flex-col items-end">
-                      <span className={`font-mono-metric text-[14px] font-bold ${
-                        isIncome ? 'text-secondary' : 'text-error'
-                      }`}>
-                        {isIncome ? '+' : '-'}{formatAmount(tx.amount, tx.currency)}
-                      </span>
-                      {tx.currency === 'USD' && (
-                        <span className="text-[10px] font-mono text-on-surface-variant/80 font-medium">
-                          ≈ {getDopEquivalent(tx.amount, tx.currency, tx.amountInDop)}
+                    <div className="flex items-center gap-2">
+                      <div className="flex flex-col items-end">
+                        <span className={`font-mono-metric text-[14px] font-bold ${
+                          isIncome ? 'text-secondary' : 'text-error'
+                        }`}>
+                          {isIncome ? '+' : '-'}{formatAmount(tx.amount, tx.currency)}
                         </span>
-                      )}
+                        {tx.currency === 'USD' && (
+                          <span className="text-[10px] font-mono text-on-surface-variant/80 font-medium">
+                            ≈ {getDopEquivalent(tx.amount, tx.currency, tx.amountInDop)}
+                          </span>
+                        )}
+                      </div>
+                      <button
+                        onClick={() => handleOpenEdit(tx)}
+                        className="p-1 rounded-lg text-on-surface-variant/70 hover:text-primary hover:bg-surface-container-highest transition-colors cursor-pointer"
+                        title="Modificar monto"
+                      >
+                        <span className="material-symbols-outlined text-[15px]">edit</span>
+                      </button>
                     </div>
                   </div>
                 </div>
@@ -421,13 +465,22 @@ export const TransactionList: React.FC<TransactionListProps> = ({
 
                         {/* Actions */}
                         <td className="py-3 px-4 text-center whitespace-nowrap">
-                          <button
-                            onClick={() => onDelete(tx.id)}
-                            className="p-1.5 rounded-lg text-on-surface-variant hover:text-error hover:bg-error-container/20 transition-all cursor-pointer opacity-80 group-hover:opacity-100"
-                            title="Eliminar movimiento"
-                          >
-                            <span className="material-symbols-outlined text-[16px]">delete</span>
-                          </button>
+                          <div className="flex items-center justify-center gap-1">
+                            <button
+                              onClick={() => handleOpenEdit(tx)}
+                              className="p-1.5 rounded-lg text-on-surface-variant hover:text-primary hover:bg-primary-container/20 transition-all cursor-pointer opacity-80 group-hover:opacity-100"
+                              title="Modificar monto"
+                            >
+                              <span className="material-symbols-outlined text-[16px]">edit</span>
+                            </button>
+                            <button
+                              onClick={() => onDelete(tx.id)}
+                              className="p-1.5 rounded-lg text-on-surface-variant hover:text-error hover:bg-error-container/20 transition-all cursor-pointer opacity-80 group-hover:opacity-100"
+                              title="Eliminar movimiento"
+                            >
+                              <span className="material-symbols-outlined text-[16px]">delete</span>
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     );
@@ -435,6 +488,134 @@ export const TransactionList: React.FC<TransactionListProps> = ({
                 )}
               </tbody>
             </table>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Amount & Currency Modal */}
+      {editingTx && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+          <div className="relative w-full max-w-md bg-surface-container border border-outline-variant/30 rounded-2xl p-6 shadow-[0_20px_50px_rgba(0,0,0,0.6)] flex flex-col gap-5">
+            {/* Header */}
+            <div className="flex items-center justify-between border-b border-outline-variant/15 pb-3">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 rounded-xl bg-primary/10 text-primary">
+                  <span className="material-symbols-outlined text-[20px]">edit</span>
+                </div>
+                <div>
+                  <h3 className="font-title-md text-on-surface font-semibold text-[16px]">
+                    Modificar Transacción
+                  </h3>
+                  <p className="font-label-sm text-on-surface-variant text-[12px]">
+                    {editingTx.merchant} • {formatDate(editingTx.date)}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setEditingTx(null)}
+                className="p-1.5 rounded-lg text-on-surface-variant hover:text-on-surface hover:bg-surface-container-highest transition-colors cursor-pointer"
+              >
+                <span className="material-symbols-outlined text-[20px]">close</span>
+              </button>
+            </div>
+
+            {/* Form */}
+            <form onSubmit={handleSaveEdit} className="flex flex-col gap-4">
+              {/* Currency Toggle */}
+              <div>
+                <label className="block font-label-md text-on-surface-variant text-[12px] font-medium mb-1.5">
+                  Moneda
+                </label>
+                <div className="grid grid-cols-2 gap-2 p-1 bg-surface-container-highest rounded-xl border border-outline-variant/20">
+                  <button
+                    type="button"
+                    onClick={() => setEditCurrencyValue('DOP')}
+                    className={`py-2 rounded-lg text-[13px] font-semibold transition-all ${
+                      editCurrencyValue === 'DOP'
+                        ? 'bg-primary text-on-primary shadow-sm'
+                        : 'text-on-surface-variant hover:text-on-surface'
+                    }`}
+                  >
+                    DOP (RD$)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setEditCurrencyValue('USD')}
+                    className={`py-2 rounded-lg text-[13px] font-semibold transition-all ${
+                      editCurrencyValue === 'USD'
+                        ? 'bg-primary text-on-primary shadow-sm'
+                        : 'text-on-surface-variant hover:text-on-surface'
+                    }`}
+                  >
+                    USD ($)
+                  </button>
+                </div>
+              </div>
+
+              {/* Amount Input */}
+              <div>
+                <label className="block font-label-md text-on-surface-variant text-[12px] font-medium mb-1.5">
+                  Monto ({editCurrencyValue})
+                </label>
+                <div className="relative">
+                  <span className="absolute left-3.5 top-1/2 -translate-y-1/2 font-mono-metric font-bold text-on-surface-variant text-[16px]">
+                    {editCurrencyValue === 'USD' ? '$' : 'RD$'}
+                  </span>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0.01"
+                    required
+                    autoFocus
+                    value={editAmountValue}
+                    onChange={(e) => setEditAmountValue(e.target.value)}
+                    placeholder="0.00"
+                    className="w-full bg-surface-container-highest border border-outline-variant/30 rounded-xl pl-14 pr-4 py-3 text-on-surface font-mono-metric font-bold text-[18px] outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all"
+                  />
+                </div>
+                {editCurrencyValue === 'USD' && (
+                  <p className="mt-1.5 font-label-sm text-[12px] text-secondary font-medium">
+                    ≈ RD$ {new Intl.NumberFormat('es-DO', { minimumFractionDigits: 2 }).format((parseFloat(editAmountValue) || 0) * 60.0)} DOP (Tasa estimada 60.00)
+                  </p>
+                )}
+              </div>
+
+              {/* Category selector */}
+              <div>
+                <label className="block font-label-md text-on-surface-variant text-[12px] font-medium mb-1.5">
+                  Categoría
+                </label>
+                <select
+                  value={editCategoryValue}
+                  onChange={(e) => setEditCategoryValue(e.target.value as Category)}
+                  className="w-full bg-surface-container-highest border border-outline-variant/30 rounded-xl px-3 py-2.5 text-on-surface font-body-sm text-[13px] outline-none focus:border-primary cursor-pointer"
+                >
+                  {CATEGORIES.map((c) => (
+                    <option key={c} value={c}>
+                      {c}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Actions */}
+              <div className="flex items-center justify-end gap-3 pt-3 border-t border-outline-variant/15 mt-2">
+                <button
+                  type="button"
+                  onClick={() => setEditingTx(null)}
+                  className="px-4 py-2.5 rounded-xl border border-outline-variant/30 text-on-surface font-label-md text-[13px] font-semibold hover:bg-surface-container-highest transition-colors cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2.5 rounded-xl bg-primary text-on-primary font-label-md text-[13px] font-bold shadow-lg hover:opacity-95 active:scale-[0.98] transition-all cursor-pointer flex items-center gap-1.5"
+                >
+                  <span className="material-symbols-outlined text-[16px]">save</span>
+                  <span>Guardar Cambios</span>
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

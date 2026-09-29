@@ -221,6 +221,16 @@ export function App() {
     }
   };
 
+  const handleUpdateTransaction = async (id: string, updates: Partial<Transaction>) => {
+    try {
+      await ApiClient.updateTransaction(id, updates);
+      showToast('success', 'Movimiento actualizado correctamente.');
+      await loadData(selectedBanks);
+    } catch {
+      showToast('error', 'Error al actualizar el movimiento');
+    }
+  };
+
   const handleDeleteTransaction = async (id: string) => {
     if (!window.confirm('¿Seguro que deseas eliminar este movimiento?')) return;
     try {
@@ -428,6 +438,7 @@ export function App() {
           selectedCategory={selectedCategory}
           onSelectCategory={setSelectedCategory}
           onUpdateCategory={handleUpdateCategory}
+          onUpdateTransaction={handleUpdateTransaction}
           onDelete={handleDeleteTransaction}
           onClearAll={handleClearAllTransactions}
           loading={loading}

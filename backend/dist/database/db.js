@@ -405,6 +405,8 @@ exports.dbOps = {
             tx.merchant = updates.merchant;
         if (updates.amount !== undefined)
             tx.amount = updates.amount;
+        if (updates.currency !== undefined)
+            tx.currency = updates.currency;
         if (updates.notes !== undefined)
             tx.notes = updates.notes;
         if (updates.type !== undefined)
