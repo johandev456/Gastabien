@@ -349,12 +349,30 @@ fun TransactionDetailCard(
             }
 
             Column(horizontalAlignment = Alignment.End) {
-                Text(
-                    text = "${if (isExpense) "-" else "+"} ${dopFormat.format(tx.amount)}",
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = if (isExpense) ErrorColor else Secondary
-                )
+                val isUsd = tx.currency.equals("USD", ignoreCase = true)
+                val effectiveDop = tx.amountInDop ?: (if (isUsd) tx.amount * (tx.exchangeRate ?: 60.0) else tx.amount)
+
+                if (isUsd) {
+                    Text(
+                        text = "${if (isExpense) "-" else "+"} $ ${String.format(Locale.US, "%.2f", tx.amount)} USD",
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = if (isExpense) ErrorColor else Secondary
+                    )
+                    Text(
+                        text = "≈ ${dopFormat.format(effectiveDop)}",
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = OnSurfaceVariant
+                    )
+                } else {
+                    Text(
+                        text = "${if (isExpense) "-" else "+"} ${dopFormat.format(tx.amount)}",
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = if (isExpense) ErrorColor else Secondary
+                    )
+                }
                 IconButton(
                     onClick = onDelete,
                     modifier = Modifier.size(26.dp)

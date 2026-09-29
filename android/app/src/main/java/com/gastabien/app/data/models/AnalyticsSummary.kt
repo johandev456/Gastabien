@@ -31,6 +31,7 @@ data class AnalyticsSummary(
     @SerializedName("totalIncome") val totalIncome: Double,
     @SerializedName("netBalance") val netBalance: Double,
     @SerializedName("currency") val currency: String = "DOP",
+    @SerializedName("usdToDopRate") val usdToDopRate: Double? = 60.0,
     @SerializedName("transactionsCount") val transactionsCount: Int,
     @SerializedName("categories") val categories: List<CategorySummary>,
     @SerializedName("byBank") val byBank: List<BankDistribution>,

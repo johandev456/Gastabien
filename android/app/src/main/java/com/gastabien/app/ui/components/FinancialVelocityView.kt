@@ -35,7 +35,7 @@ fun FinancialVelocityView(
     // Metrics computation
     val dailyBurnRate = if (totalExpenses > 0) totalExpenses / 30.0 else 0.0
     val avgTicket = if (expenseTxs.isNotEmpty()) totalExpenses / expenseTxs.size else 0.0
-    val maxTx = expenseTxs.maxByOrNull { it.amount }
+    val maxTx = expenseTxs.maxByOrNull { it.amountInDop ?: (if (it.currency.equals("USD", ignoreCase = true)) it.amount * (it.exchangeRate ?: 60.0) else it.amount) }
 
     // Grouping by lifestyle categories
     val essentialsCategories = listOf("supermercado", "alimento", "combustible", "gasolina", "salud", "farmacia")
@@ -356,12 +356,32 @@ fun FinancialVelocityView(
                         }
                     }
 
-                    Text(
-                        text = dopFormat.format(maxTx.amount),
-                        fontSize = 15.sp,
-                        fontWeight = FontWeight.ExtraBold,
-                        color = maxCatTheme.color
-                    )
+                    val isUsd = maxTx.currency.equals("USD", ignoreCase = true)
+                    val effectiveDop = maxTx.amountInDop ?: (if (isUsd) maxTx.amount * (maxTx.exchangeRate ?: 60.0) else maxTx.amount)
+
+                    Column(horizontalAlignment = Alignment.End) {
+                        if (isUsd) {
+                            Text(
+                                text = "$ ${String.format(java.util.Locale.US, "%.2f", maxTx.amount)} USD",
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.ExtraBold,
+                                color = maxCatTheme.color
+                            )
+                            Text(
+                                text = "≈ ${dopFormat.format(effectiveDop)}",
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = OnSurfaceVariant
+                            )
+                        } else {
+                            Text(
+                                text = dopFormat.format(maxTx.amount),
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.ExtraBold,
+                                color = maxCatTheme.color
+                            )
+                        }
+                    }
                 }
             }
         }

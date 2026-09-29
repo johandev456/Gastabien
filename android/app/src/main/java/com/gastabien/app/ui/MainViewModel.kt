@@ -157,6 +157,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun addManualTransaction(
         merchant: String,
         amount: Double,
+        currency: String = "DOP",
         category: String,
         bank: String,
         bankName: String,
@@ -169,6 +170,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     CreateTransactionRequest(
                         merchant = merchant,
                         amount = amount,
+                        currency = currency,
                         category = category,
                         bank = bank,
                         bankName = bankName,

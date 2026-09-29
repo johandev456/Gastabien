@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { dbOps } from '../database/db';
 import { BankCode, Category } from '../types';
 import { categorizationService } from '../services/categorization.service';
+import { enrichTransaction } from '../services/transaction.service';
 
 const router = Router();
 
@@ -19,7 +20,8 @@ router.get('/', (req, res) => {
     offset: offset ? parseInt(offset as string, 10) : undefined,
   };
 
-  const transactions = dbOps.getTransactions(userId, filters);
+  const rawTransactions = dbOps.getTransactions(userId, filters);
+  const transactions = rawTransactions.map(enrichTransaction);
   return res.json({
     count: transactions.length,
     transactions
@@ -33,7 +35,7 @@ router.get('/:id', (req, res) => {
   if (!tx) {
     return res.status(404).json({ error: 'Transacción no encontrada' });
   }
-  return res.json(tx);
+  return res.json(enrichTransaction(tx));
 });
 
 // Create manual transaction

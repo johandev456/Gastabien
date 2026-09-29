@@ -35,6 +35,8 @@ export interface ParsedTransaction {
   type: TransactionType;
   amount: number;
   currency: 'DOP' | 'USD';
+  amountInDop?: number;
+  exchangeRate?: number;
   merchant: string;
   accountReference?: string; // e.g. "Tarjeta ...4829" or "Cta ...1029"
   date: string; // ISO format or YYYY-MM-DD HH:mm:ss
@@ -77,6 +79,7 @@ export interface AnalyticsSummary {
   totalIncome: number;
   netBalance: number;
   currency: 'DOP';
+  usdToDopRate?: number;
   transactionsCount: number;
   categories: CategorySummary[];
   byBank: {

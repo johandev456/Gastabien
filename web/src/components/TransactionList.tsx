@@ -58,12 +58,22 @@ export const TransactionList: React.FC<TransactionListProps> = ({
     onSelectCategory?.(cat === 'ALL' ? null : cat);
   };
 
-  const formatDOP = (amount: number, currency: 'DOP' | 'USD' = 'DOP') => {
+  const formatAmount = (amount: number, currency: 'DOP' | 'USD' = 'DOP') => {
     return new Intl.NumberFormat('es-DO', {
       style: 'currency',
       currency: currency === 'USD' ? 'USD' : 'DOP',
       minimumFractionDigits: 2
     }).format(amount);
+  };
+
+  const getDopEquivalent = (amount: number, currency: 'DOP' | 'USD' = 'DOP', amountInDop?: number) => {
+    if (currency !== 'USD') return null;
+    const dopVal = amountInDop ?? (amount * 60.0);
+    return new Intl.NumberFormat('es-DO', {
+      style: 'currency',
+      currency: 'DOP',
+      minimumFractionDigits: 2
+    }).format(dopVal);
   };
 
   const formatDate = (isoString: string) => {
@@ -212,11 +222,18 @@ export const TransactionList: React.FC<TransactionListProps> = ({
                       <span className="material-symbols-outlined text-[14px]">check</span>
                       {isIncome ? 'Aplicado' : 'Validado'}
                     </span>
-                    <span className={`font-mono-metric text-[14px] font-bold ${
-                      isIncome ? 'text-secondary' : 'text-error'
-                    }`}>
-                      {isIncome ? '+' : '-'}{formatDOP(tx.amount, tx.currency)}
-                    </span>
+                    <div className="flex flex-col items-end">
+                      <span className={`font-mono-metric text-[14px] font-bold ${
+                        isIncome ? 'text-secondary' : 'text-error'
+                      }`}>
+                        {isIncome ? '+' : '-'}{formatAmount(tx.amount, tx.currency)}
+                      </span>
+                      {tx.currency === 'USD' && (
+                        <span className="text-[10px] font-mono text-on-surface-variant/80 font-medium">
+                          ≈ {getDopEquivalent(tx.amount, tx.currency, tx.amountInDop)}
+                        </span>
+                      )}
+                    </div>
                   </div>
                 </div>
               );
@@ -386,13 +403,20 @@ export const TransactionList: React.FC<TransactionListProps> = ({
 
                         {/* Amount */}
                         <td className="py-3 px-4 text-right whitespace-nowrap">
-                          <span
-                            className={`font-mono-metric font-bold text-[14px] ${
-                              isExpense ? 'text-error' : 'text-secondary'
-                            }`}
-                          >
-                            {isExpense ? '-' : '+'}{formatDOP(tx.amount, tx.currency)}
-                          </span>
+                          <div className="flex flex-col items-end">
+                            <span
+                              className={`font-mono-metric font-bold text-[14px] ${
+                                isExpense ? 'text-error' : 'text-secondary'
+                              }`}
+                            >
+                              {isExpense ? '-' : '+'}{formatAmount(tx.amount, tx.currency)}
+                            </span>
+                            {tx.currency === 'USD' && (
+                              <span className="text-[11px] font-mono text-on-surface-variant/80 font-medium">
+                                ≈ {getDopEquivalent(tx.amount, tx.currency, tx.amountInDop)}
+                              </span>
+                            )}
+                          </div>
                         </td>
 
                         {/* Actions */}

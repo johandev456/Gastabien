@@ -14,15 +14,17 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import com.gastabien.app.ui.theme.*
+import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AddExpenseDialog(
     onDismiss: () -> Unit,
-    onConfirm: (merchant: String, amount: Double, category: String, bank: String, bankName: String, type: String, notes: String?) -> Unit
+    onConfirm: (merchant: String, amount: Double, currency: String, category: String, bank: String, bankName: String, type: String, notes: String?) -> Unit
 ) {
     var merchant by remember { mutableStateOf("") }
     var amountText by remember { mutableStateOf("") }
+    var currency by remember { mutableStateOf("DOP") }
     var category by remember { mutableStateOf("Supermercados") }
     var bank by remember { mutableStateOf("PROMERICA") }
     var type by remember { mutableStateOf("EXPENSE") }
@@ -103,6 +105,43 @@ fun AddExpenseDialog(
 
                 Spacer(modifier = Modifier.height(12.dp))
 
+                // Currency Selector (DOP vs USD)
+                Row(modifier = Modifier.fillMaxWidth()) {
+                    Button(
+                        onClick = { currency = "DOP" },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = if (currency == "DOP") Primary else SurfaceContainerHigh
+                        ),
+                        shape = RoundedCornerShape(10.dp),
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text(
+                            "🇩🇴 DOP (RD$)",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 12.sp,
+                            color = if (currency == "DOP") OnPrimary else OnSurfaceVariant
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Button(
+                        onClick = { currency = "USD" },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = if (currency == "USD") Primary else SurfaceContainerHigh
+                        ),
+                        shape = RoundedCornerShape(10.dp),
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text(
+                            "🇺🇸 USD ($)",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 12.sp,
+                            color = if (currency == "USD") OnPrimary else OnSurfaceVariant
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
                 // Merchant input
                 OutlinedTextField(
                     value = merchant,
@@ -122,10 +161,11 @@ fun AddExpenseDialog(
                 Spacer(modifier = Modifier.height(10.dp))
 
                 // Amount input
+                val parsedAmount = amountText.toDoubleOrNull() ?: 0.0
                 OutlinedTextField(
                     value = amountText,
                     onValueChange = { amountText = it },
-                    label = { Text("Monto en DOP (RD$)", color = OnSurfaceVariant) },
+                    label = { Text(if (currency == "USD") "Monto en USD ($)" else "Monto en DOP (RD$)", color = OnSurfaceVariant) },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                     singleLine = true,
                     colors = OutlinedTextFieldDefaults.colors(
@@ -137,6 +177,17 @@ fun AddExpenseDialog(
                     shape = RoundedCornerShape(12.dp),
                     modifier = Modifier.fillMaxWidth()
                 )
+
+                if (currency == "USD" && parsedAmount > 0) {
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = "≈ RD$ ${String.format(Locale.US, "%,.2f", parsedAmount * 60.0)} (Tasa: 60.00 DOP/USD)",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = Secondary,
+                        modifier = Modifier.padding(start = 4.dp)
+                    )
+                }
 
                 Spacer(modifier = Modifier.height(10.dp))
 
@@ -201,7 +252,7 @@ fun AddExpenseDialog(
                                     "QIK" -> "Qik Digital"
                                     else -> "Manual"
                                 }
-                                onConfirm(merchant, amount, category, bank, bankName, type, notes)
+                                onConfirm(merchant, amount, currency, category, bank, bankName, type, notes)
                                 onDismiss()
                             }
                         },

@@ -42,12 +42,12 @@ fun MerchantLeaderboardView(
     modifier: Modifier = Modifier
 ) {
     val expenseTx = transactions.filter { it.type == "EXPENSE" }
-    val total = if (totalExpenses > 0) totalExpenses else expenseTx.sumOf { it.amount }
+    val total = if (totalExpenses > 0) totalExpenses else expenseTx.sumOf { it.amountInDop ?: (if (it.currency.equals("USD", ignoreCase = true)) it.amount * (it.exchangeRate ?: 60.0) else it.amount) }
 
     // Aggregate by merchant
     val merchantsMap = expenseTx.groupBy { it.merchant }
     val merchantList = merchantsMap.map { (merchant, txs) ->
-        val sum = txs.sumOf { it.amount }
+        val sum = txs.sumOf { it.amountInDop ?: (if (it.currency.equals("USD", ignoreCase = true)) it.amount * (it.exchangeRate ?: 60.0) else it.amount) }
         val pct = if (total > 0) (sum / total) * 100.0 else 0.0
         val topCategory = txs.groupBy { it.category }.maxByOrNull { it.value.size }?.key ?: "Otros"
         val topBank = txs.groupBy { it.bankName }.maxByOrNull { it.value.size }?.key ?: "Banco RD"

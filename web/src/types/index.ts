@@ -26,6 +26,8 @@ export interface Transaction {
   type: TransactionType;
   amount: number;
   currency: 'DOP' | 'USD';
+  amountInDop?: number;
+  exchangeRate?: number;
   merchant: string;
   accountReference?: string;
   date: string;
@@ -69,6 +71,7 @@ export interface AnalyticsSummary {
   totalIncome: number;
   netBalance: number;
   currency: 'DOP';
+  usdToDopRate?: number;
   transactionsCount: number;
   categories: CategorySummary[];
   byBank: BankDistribution[];

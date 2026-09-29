@@ -14,6 +14,7 @@ exports.CONFIG = {
     NODE_ENV: process.env.NODE_ENV || 'development',
     FRONTEND_URL: process.env.FRONTEND_URL || (process.env.NODE_ENV === 'production' ? 'https://gastabien.vercel.app' : 'http://localhost:5173'),
     JWT_SECRET: process.env.JWT_SECRET || 'gastabien-super-secret-key-dr-2026',
+    USD_TO_DOP_RATE: parseFloat(process.env.USD_TO_DOP_RATE || '60.0'),
     GOOGLE: {
         CLIENT_ID: process.env.GOOGLE_CLIENT_ID || DEFAULT_GOOGLE_CLIENT_ID,
         CLIENT_SECRET: process.env.GOOGLE_CLIENT_SECRET || DEFAULT_GOOGLE_CLIENT_SECRET,

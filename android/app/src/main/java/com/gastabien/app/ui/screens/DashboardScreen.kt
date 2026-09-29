@@ -212,11 +212,11 @@ fun DashboardScreen(
                     summary.recentTransactions
                 }
 
-                // Category largest transactions
+                // Category largest transactions (ranked by DOP value)
                 val categoryTransactions = if (isCategoryActive) {
                     summary.recentTransactions
                         .filter { it.category.equals(selectedCategory, ignoreCase = true) && it.type == "EXPENSE" }
-                        .sortedByDescending { it.amount }
+                        .sortedByDescending { it.amountInDop ?: (if (it.currency.equals("USD", ignoreCase = true)) it.amount * (it.exchangeRate ?: 60.0) else it.amount) }
                 } else {
                     emptyList()
                 }
@@ -586,8 +586,8 @@ fun TopCategoryComparisonCard(
     onClearFilter: () -> Unit
 ) {
     val theme = getCategoryTheme(categoryName)
-    val totalAmount = transactions.sumOf { it.amount }
-    val maxTxAmount = if (transactions.isNotEmpty()) transactions.maxOf { it.amount } else 1.0
+    val totalAmount = transactions.sumOf { it.amountInDop ?: (if (it.currency.equals("USD", ignoreCase = true)) it.amount * (it.exchangeRate ?: 60.0) else it.amount) }
+    val maxTxAmount = if (transactions.isNotEmpty()) transactions.maxOf { it.amountInDop ?: (if (it.currency.equals("USD", ignoreCase = true)) it.amount * (it.exchangeRate ?: 60.0) else it.amount) } else 1.0
     val avgAmount = if (transactions.isNotEmpty()) totalAmount / transactions.size else 0.0
 
     GlassCard(modifier = Modifier.fillMaxWidth()) {
@@ -656,7 +656,9 @@ fun TopCategoryComparisonCard(
             } else {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     transactions.take(4).forEachIndexed { index, tx ->
-                        val ratio = if (maxTxAmount > 0) (tx.amount / maxTxAmount).toFloat().coerceIn(0.1f, 1f) else 0.5f
+                        val isUsd = tx.currency.equals("USD", ignoreCase = true)
+                        val txDop = tx.amountInDop ?: (if (isUsd) tx.amount * (tx.exchangeRate ?: 60.0) else tx.amount)
+                        val ratio = if (maxTxAmount > 0) (txDop / maxTxAmount).toFloat().coerceIn(0.1f, 1f) else 0.5f
 
                         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                             Row(
@@ -699,12 +701,21 @@ fun TopCategoryComparisonCard(
                                     )
                                 }
 
-                                Text(
-                                    text = dopFormat.format(tx.amount),
-                                    fontSize = 13.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = theme.color
-                                )
+                                if (isUsd) {
+                                    Text(
+                                        text = "$ ${String.format(Locale.US, "%.2f", tx.amount)} USD",
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = theme.color
+                                    )
+                                } else {
+                                    Text(
+                                        text = dopFormat.format(tx.amount),
+                                        fontSize = 13.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = theme.color
+                                    )
+                                }
                             }
 
                             // Glowing Horizontal Bar
@@ -1154,12 +1165,32 @@ fun RecentTransactionItem(tx: Transaction, dopFormat: NumberFormat) {
                 }
             }
 
-            Text(
-                text = "${if (isExpense) "-" else "+"} ${dopFormat.format(tx.amount)}",
-                fontSize = 14.sp,
-                fontWeight = FontWeight.Bold,
-                color = if (isExpense) ErrorColor else Secondary
-            )
+            Column(horizontalAlignment = Alignment.End) {
+                val isUsd = tx.currency.equals("USD", ignoreCase = true)
+                val effectiveDop = tx.amountInDop ?: (if (isUsd) tx.amount * (tx.exchangeRate ?: 60.0) else tx.amount)
+
+                if (isUsd) {
+                    Text(
+                        text = "${if (isExpense) "-" else "+"} $ ${String.format(Locale.US, "%.2f", tx.amount)} USD",
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = if (isExpense) ErrorColor else Secondary
+                    )
+                    Text(
+                        text = "≈ ${dopFormat.format(effectiveDop)}",
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = OnSurfaceVariant
+                    )
+                } else {
+                    Text(
+                        text = "${if (isExpense) "-" else "+"} ${dopFormat.format(tx.amount)}",
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = if (isExpense) ErrorColor else Secondary
+                    )
+                }
+            }
         }
     }
 }

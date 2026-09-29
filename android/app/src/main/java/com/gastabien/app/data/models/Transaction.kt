@@ -11,6 +11,8 @@ data class Transaction(
     @SerializedName("type") val type: String, // EXPENSE, INCOME, TRANSFER
     @SerializedName("amount") val amount: Double,
     @SerializedName("currency") val currency: String = "DOP",
+    @SerializedName("amountInDop") val amountInDop: Double? = null,
+    @SerializedName("exchangeRate") val exchangeRate: Double? = null,
     @SerializedName("merchant") val merchant: String,
     @SerializedName("accountReference") val accountReference: String? = null,
     @SerializedName("date") val date: String,
@@ -28,6 +30,7 @@ data class TransactionResponse(
 data class CreateTransactionRequest(
     val merchant: String,
     val amount: Double,
+    val currency: String = "DOP",
     val category: String? = null,
     val bank: String = "POPULAR",
     val bankName: String = "Banco Popular",

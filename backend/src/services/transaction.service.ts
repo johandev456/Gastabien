@@ -1,15 +1,33 @@
 import { dbOps } from '../database/db';
 import { AnalyticsSummary, CategorySummary, Category, BankCode, Transaction } from '../types';
-import { CATEGORY_COLORS, CATEGORY_ICONS, SUPPORTED_BANKS } from '../config';
+import { CATEGORY_COLORS, CATEGORY_ICONS, SUPPORTED_BANKS, CONFIG } from '../config';
+
+export function getAmountInDop(amount: number, currency: 'DOP' | 'USD' = 'DOP'): number {
+  if (currency === 'USD') {
+    return Math.round(amount * CONFIG.USD_TO_DOP_RATE * 100) / 100;
+  }
+  return Math.round(amount * 100) / 100;
+}
+
+export function enrichTransaction(tx: Transaction): Transaction {
+  const amountInDop = getAmountInDop(tx.amount, tx.currency);
+  return {
+    ...tx,
+    amountInDop,
+    exchangeRate: tx.currency === 'USD' ? CONFIG.USD_TO_DOP_RATE : 1.0
+  };
+}
 
 export class TransactionService {
   public getAnalyticsSummary(userId: string, filterBanks?: BankCode[]): AnalyticsSummary {
-    let transactions = dbOps.getTransactions(userId);
+    let rawTransactions = dbOps.getTransactions(userId);
 
     // Apply bank filter if specified
     if (filterBanks && filterBanks.length > 0) {
-      transactions = transactions.filter(tx => filterBanks.includes(tx.bank));
+      rawTransactions = rawTransactions.filter(tx => filterBanks.includes(tx.bank));
     }
+
+    const transactions = rawTransactions.map(enrichTransaction);
 
     let totalExpenses = 0;
     let totalIncome = 0;
@@ -26,33 +44,34 @@ export class TransactionService {
     const monthlyMap: Record<string, { expenses: number; income: number }> = {};
 
     for (const tx of transactions) {
+      const dopAmount = tx.amountInDop ?? getAmountInDop(tx.amount, tx.currency);
       const monthKey = tx.date.substring(0, 7); // YYYY-MM
       if (!monthlyMap[monthKey]) {
         monthlyMap[monthKey] = { expenses: 0, income: 0 };
       }
 
       if (tx.type === 'EXPENSE') {
-        totalExpenses += tx.amount;
-        monthlyMap[monthKey].expenses += tx.amount;
+        totalExpenses += dopAmount;
+        monthlyMap[monthKey].expenses += dopAmount;
 
         // Categories
         if (!categoryTotals[tx.category]) {
           categoryTotals[tx.category] = { total: 0, count: 0 };
         }
-        categoryTotals[tx.category].total += tx.amount;
+        categoryTotals[tx.category].total += dopAmount;
         categoryTotals[tx.category].count += 1;
 
         // Banks
         if (bankTotals[tx.bank]) {
-          bankTotals[tx.bank].expenses += tx.amount;
+          bankTotals[tx.bank].expenses += dopAmount;
           bankTotals[tx.bank].count += 1;
         }
       } else if (tx.type === 'INCOME') {
-        totalIncome += tx.amount;
-        monthlyMap[monthKey].income += tx.amount;
+        totalIncome += dopAmount;
+        monthlyMap[monthKey].income += dopAmount;
 
         if (bankTotals[tx.bank]) {
-          bankTotals[tx.bank].income += tx.amount;
+          bankTotals[tx.bank].income += dopAmount;
           bankTotals[tx.bank].count += 1;
         }
       }
@@ -103,6 +122,7 @@ export class TransactionService {
       totalIncome: Math.round(totalIncome * 100) / 100,
       netBalance: Math.round(netBalance * 100) / 100,
       currency: 'DOP',
+      usdToDopRate: CONFIG.USD_TO_DOP_RATE,
       transactionsCount: transactions.length,
       categories,
       byBank,

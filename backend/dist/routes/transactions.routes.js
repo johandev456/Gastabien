@@ -3,6 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = require("express");
 const db_1 = require("../database/db");
 const categorization_service_1 = require("../services/categorization.service");
+const transaction_service_1 = require("../services/transaction.service");
 const router = (0, express_1.Router)();
 // List transactions
 router.get('/', (req, res) => {
@@ -16,7 +17,8 @@ router.get('/', (req, res) => {
         limit: limit ? parseInt(limit, 10) : undefined,
         offset: offset ? parseInt(offset, 10) : undefined,
     };
-    const transactions = db_1.dbOps.getTransactions(userId, filters);
+    const rawTransactions = db_1.dbOps.getTransactions(userId, filters);
+    const transactions = rawTransactions.map(transaction_service_1.enrichTransaction);
     return res.json({
         count: transactions.length,
         transactions
@@ -29,7 +31,7 @@ router.get('/:id', (req, res) => {
     if (!tx) {
         return res.status(404).json({ error: 'Transacción no encontrada' });
     }
-    return res.json(tx);
+    return res.json((0, transaction_service_1.enrichTransaction)(tx));
 });
 // Create manual transaction
 router.post('/', (req, res) => {

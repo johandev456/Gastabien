@@ -153,10 +153,11 @@ class MainActivity : ComponentActivity() {
                     if (showAddDialog) {
                         AddExpenseDialog(
                             onDismiss = { showAddDialog = false },
-                            onConfirm = { merchant, amount, category, bank, bankName, type, notes ->
+                            onConfirm = { merchant, amount, currency, category, bank, bankName, type, notes ->
                                 viewModel.addManualTransaction(
                                     merchant = merchant,
                                     amount = amount,
+                                    currency = currency,
                                     category = category,
                                     bank = bank,
                                     bankName = bankName,

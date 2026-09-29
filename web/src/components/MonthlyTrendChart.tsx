@@ -51,16 +51,18 @@ export const MonthlyTrendChart: React.FC<MonthlyTrendChartProps> = ({
     return { colorHex: '#3e90ff', barGrad: 'from-primary to-primary-container', shadow: 'rgba(62,144,255,0.4)' };
   };
 
+  const getDopValue = (t: Transaction) => t.amountInDop ?? (t.currency === 'USD' ? t.amount * 60.0 : t.amount);
+
   // When a category is selected, extract and sort its largest transactions
   const categoryTransactions = selectedCategory
     ? transactions
         .filter(t => t.category === selectedCategory && t.type === 'EXPENSE')
-        .sort((a, b) => b.amount - a.amount)
+        .sort((a, b) => getDopValue(b) - getDopValue(a))
     : [];
 
   const topTransactions = categoryTransactions.slice(0, 4);
-  const maxTxAmount = topTransactions.length > 0 ? topTransactions[0].amount : 1;
-  const categoryTotal = categoryTransactions.reduce((acc, t) => acc + t.amount, 0);
+  const maxTxAmount = topTransactions.length > 0 ? getDopValue(topTransactions[0]) : 1;
+  const categoryTotal = categoryTransactions.reduce((acc, t) => acc + getDopValue(t), 0);
   const avgAmount = categoryTransactions.length > 0 ? categoryTotal / categoryTransactions.length : 0;
   const activeCategoryTheme = getCategoryColor(selectedCategory || undefined);
 
@@ -148,12 +150,13 @@ export const MonthlyTrendChart: React.FC<MonthlyTrendChartProps> = ({
               ) : (
                 <div className="relative h-60 pl-2 pr-2 flex items-end justify-around gap-2 sm:gap-4">
                   {topTransactions.map((tx, idx) => {
-                    const barHeightPx = Math.min(210, Math.max(35, (tx.amount / maxTxAmount) * 200));
+                    const dopVal = getDopValue(tx);
+                    const barHeightPx = Math.min(210, Math.max(35, (dopVal / maxTxAmount) * 200));
                     return (
                       <div key={tx.id || idx} className="flex flex-col items-center gap-2 group flex-1 max-w-[120px]">
                         {/* Top Amount Badge */}
                         <div className="opacity-90 group-hover:opacity-100 transition-opacity font-mono-metric text-[11px] sm:text-[12px] text-on-surface font-bold whitespace-nowrap bg-surface-container-highest px-2 py-0.5 rounded-full shadow-md border border-outline-variant/20">
-                          {formatDOP(tx.amount)}
+                          {tx.currency === 'USD' ? `$${tx.amount} USD` : formatDOP(tx.amount)}
                         </div>
 
                         {/* 3D Glass Bar */}

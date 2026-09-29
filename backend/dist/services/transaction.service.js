@@ -1,15 +1,32 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.transactionService = exports.TransactionService = void 0;
+exports.getAmountInDop = getAmountInDop;
+exports.enrichTransaction = enrichTransaction;
 const db_1 = require("../database/db");
 const config_1 = require("../config");
+function getAmountInDop(amount, currency = 'DOP') {
+    if (currency === 'USD') {
+        return Math.round(amount * config_1.CONFIG.USD_TO_DOP_RATE * 100) / 100;
+    }
+    return Math.round(amount * 100) / 100;
+}
+function enrichTransaction(tx) {
+    const amountInDop = getAmountInDop(tx.amount, tx.currency);
+    return {
+        ...tx,
+        amountInDop,
+        exchangeRate: tx.currency === 'USD' ? config_1.CONFIG.USD_TO_DOP_RATE : 1.0
+    };
+}
 class TransactionService {
     getAnalyticsSummary(userId, filterBanks) {
-        let transactions = db_1.dbOps.getTransactions(userId);
+        let rawTransactions = db_1.dbOps.getTransactions(userId);
         // Apply bank filter if specified
         if (filterBanks && filterBanks.length > 0) {
-            transactions = transactions.filter(tx => filterBanks.includes(tx.bank));
+            rawTransactions = rawTransactions.filter(tx => filterBanks.includes(tx.bank));
         }
+        const transactions = rawTransactions.map(enrichTransaction);
         let totalExpenses = 0;
         let totalIncome = 0;
         const categoryTotals = {};
@@ -22,30 +39,31 @@ class TransactionService {
         };
         const monthlyMap = {};
         for (const tx of transactions) {
+            const dopAmount = tx.amountInDop ?? getAmountInDop(tx.amount, tx.currency);
             const monthKey = tx.date.substring(0, 7); // YYYY-MM
             if (!monthlyMap[monthKey]) {
                 monthlyMap[monthKey] = { expenses: 0, income: 0 };
             }
             if (tx.type === 'EXPENSE') {
-                totalExpenses += tx.amount;
-                monthlyMap[monthKey].expenses += tx.amount;
+                totalExpenses += dopAmount;
+                monthlyMap[monthKey].expenses += dopAmount;
                 // Categories
                 if (!categoryTotals[tx.category]) {
                     categoryTotals[tx.category] = { total: 0, count: 0 };
                 }
-                categoryTotals[tx.category].total += tx.amount;
+                categoryTotals[tx.category].total += dopAmount;
                 categoryTotals[tx.category].count += 1;
                 // Banks
                 if (bankTotals[tx.bank]) {
-                    bankTotals[tx.bank].expenses += tx.amount;
+                    bankTotals[tx.bank].expenses += dopAmount;
                     bankTotals[tx.bank].count += 1;
                 }
             }
             else if (tx.type === 'INCOME') {
-                totalIncome += tx.amount;
-                monthlyMap[monthKey].income += tx.amount;
+                totalIncome += dopAmount;
+                monthlyMap[monthKey].income += dopAmount;
                 if (bankTotals[tx.bank]) {
-                    bankTotals[tx.bank].income += tx.amount;
+                    bankTotals[tx.bank].income += dopAmount;
                     bankTotals[tx.bank].count += 1;
                 }
             }
@@ -91,6 +109,7 @@ class TransactionService {
             totalIncome: Math.round(totalIncome * 100) / 100,
             netBalance: Math.round(netBalance * 100) / 100,
             currency: 'DOP',
+            usdToDopRate: config_1.CONFIG.USD_TO_DOP_RATE,
             transactionsCount: transactions.length,
             categories,
             byBank,

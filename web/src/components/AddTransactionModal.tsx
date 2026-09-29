@@ -9,6 +9,7 @@ interface AddTransactionModalProps {
   onSubmit: (data: {
     merchant: string;
     amount: number;
+    currency?: 'DOP' | 'USD';
     category?: Category;
     bank?: BankCode;
     bankName?: string;
@@ -41,6 +42,7 @@ export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({
 }) => {
   const [merchant, setMerchant] = useState('');
   const [amount, setAmount] = useState('');
+  const [currency, setCurrency] = useState<'DOP' | 'USD'>('DOP');
   const [category, setCategory] = useState<Category>('Supermercados');
   const [bank, setBank] = useState<BankCode>('PROMERICA');
   const [type, setType] = useState<'EXPENSE' | 'INCOME'>('EXPENSE');
@@ -76,6 +78,7 @@ export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({
     onSubmit({
       merchant,
       amount: parseFloat(amount),
+      currency,
       category: type === 'INCOME' ? 'Ingresos y Nómina' : category,
       bank,
       bankName: bankNames[bank],
@@ -86,6 +89,7 @@ export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({
     // Reset and close
     setMerchant('');
     setAmount('');
+    setCurrency('DOP');
     setNotes('');
     onClose();
   };
@@ -96,6 +100,9 @@ export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({
     setCategory('Ingresos y Nómina');
     setBank(defaultBank);
   };
+
+  const numAmount = parseFloat(amount) || 0;
+  const convertedDopPreview = currency === 'USD' ? (numAmount * 60.0).toLocaleString('es-DO', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-fade-in">
@@ -209,20 +216,58 @@ export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({
             />
           </div>
 
-          {/* Amount */}
-          <div>
-            <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">
-              Monto (RD$)
-            </label>
-            <input
-              type="number"
-              step="0.01"
-              required
-              placeholder="0.00"
-              value={amount}
-              onChange={(e) => setAmount(e.target.value)}
-              className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 transition-all font-mono text-base"
-            />
+          {/* Amount & Currency */}
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between">
+              <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider">
+                Monto
+              </label>
+              {/* Currency Toggle */}
+              <div className="flex items-center gap-1 p-0.5 bg-slate-950 rounded-lg border border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setCurrency('DOP')}
+                  className={`px-2 py-0.5 rounded text-[11px] font-bold transition-all ${
+                    currency === 'DOP'
+                      ? 'bg-emerald-500 text-slate-950 shadow'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  DOP (RD$)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCurrency('USD')}
+                  className={`px-2 py-0.5 rounded text-[11px] font-bold transition-all ${
+                    currency === 'USD'
+                      ? 'bg-emerald-500 text-slate-950 shadow'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  USD ($)
+                </button>
+              </div>
+            </div>
+            <div className="relative">
+              <span className="absolute left-3.5 top-2.5 text-slate-400 font-mono text-sm font-semibold">
+                {currency === 'USD' ? '$' : 'RD$'}
+              </span>
+              <input
+                type="number"
+                step="0.01"
+                required
+                placeholder="0.00"
+                value={amount}
+                onChange={(e) => setAmount(e.target.value)}
+                className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-12 pr-3.5 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 transition-all font-mono text-base"
+              />
+            </div>
+            {currency === 'USD' && numAmount > 0 && (
+              <div className="text-[11px] text-cyan-400 font-mono flex items-center justify-between px-1">
+                <span>Tasa de cambio: 1 USD ≈ RD$ 60.00</span>
+                <span className="font-bold">Total equivalente: RD$ {convertedDopPreview}</span>
+              </div>
+            )}
           </div>
 
           {/* Category & Bank Grid */}

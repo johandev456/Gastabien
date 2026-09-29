@@ -105,7 +105,7 @@ fun CategoriesScreen(
                 val categoryTransactions = if (isCategoryActive) {
                     summary.recentTransactions
                         .filter { it.category.equals(selectedCategory, ignoreCase = true) && it.type == "EXPENSE" }
-                        .sortedByDescending { it.amount }
+                        .sortedByDescending { it.amountInDop ?: (if (it.currency.equals("USD", ignoreCase = true)) it.amount * (it.exchangeRate ?: 60.0) else it.amount) }
                 } else {
                     emptyList()
                 }
