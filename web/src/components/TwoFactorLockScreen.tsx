@@ -22,20 +22,44 @@ export function TwoFactorLockScreen({ onAuthenticated, requiresSetup: initialReq
 
   const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
 
+  const loadSetup = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const data = await ApiClient.setup2FA();
+      setSetupData(data);
+    } catch (err) {
+      console.error(err);
+      setError('Error al inicializar configuración de 2FA. Reintenta.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleReset2FA = async () => {
+    if (!window.confirm('¿Deseas reiniciar la configuración 2FA y escanear un nuevo código QR con tu aplicación de autenticación?')) {
+      return;
+    }
+    setLoading(true);
+    setError(null);
+    try {
+      await ApiClient.reset2FA();
+      setIsSetupMode(true);
+      setUseBackupCode(false);
+      setOtpDigits(['', '', '', '', '', '']);
+      await loadSetup();
+    } catch (err: any) {
+      console.error(err);
+      setError('Error al reiniciar 2FA. Reintenta.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // Load setup data if needed
   useEffect(() => {
     if (isSetupMode) {
-      setLoading(true);
-      setError(null);
-      ApiClient.setup2FA()
-        .then(data => {
-          setSetupData(data);
-        })
-        .catch(err => {
-          console.error(err);
-          setError('Error al inicializar configuración de 2FA. Reintenta.');
-        })
-        .finally(() => setLoading(false));
+      loadSetup();
     }
   }, [isSetupMode]);
 
@@ -369,16 +393,25 @@ export function TwoFactorLockScreen({ onAuthenticated, requiresSetup: initialReq
                 )}
               </button>
 
-              <div className="flex items-center justify-center text-xs text-slate-400 pt-2">
+              <div className="flex flex-col items-center justify-center text-xs text-slate-400 pt-3 border-t border-white/5 space-y-2.5">
                 <button
                   type="button"
                   onClick={() => {
                     setUseBackupCode(!useBackupCode);
                     setError(null);
                   }}
-                  className="text-cyan-400 hover:text-cyan-300 font-medium transition-colors"
+                  className="text-cyan-400 hover:text-cyan-300 font-medium transition-colors cursor-pointer"
                 >
                   {useBackupCode ? '← Usar app de autenticación (6 dígitos)' : '¿No tienes tu teléfono? Usar código de recuperación'}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleReset2FA}
+                  className="text-amber-400/90 hover:text-amber-300 font-medium transition-colors text-[11px] flex items-center gap-1.5 cursor-pointer bg-amber-400/10 hover:bg-amber-400/20 px-3 py-1.5 rounded-lg border border-amber-400/20"
+                >
+                  <RefreshCw className="w-3 h-3" />
+                  <span>¿No tienes la app o perdiste el código? Reconfigurar 2FA con QR</span>
                 </button>
               </div>
             </div>
@@ -386,9 +419,21 @@ export function TwoFactorLockScreen({ onAuthenticated, requiresSetup: initialReq
         )}
 
         {/* Security Footer Note */}
-        <div className="mt-8 pt-4 border-t border-white/5 flex items-center justify-center gap-2 text-[11px] text-slate-400">
-          <Shield className="w-3.5 h-3.5 text-emerald-400" />
-          <span>Protección Cifrada Local • Sesión Persistente por Dispositivo</span>
+        <div className="mt-8 pt-4 border-t border-white/5 flex items-center justify-between text-[11px] text-slate-400">
+          <div className="flex items-center gap-1.5">
+            <Shield className="w-3.5 h-3.5 text-emerald-400" />
+            <span>Protección Cifrada Local</span>
+          </div>
+          {isSetupMode && (
+            <button
+              type="button"
+              onClick={handleReset2FA}
+              className="text-slate-400 hover:text-slate-200 flex items-center gap-1 text-[10px] cursor-pointer"
+            >
+              <RefreshCw className="w-2.5 h-2.5" />
+              <span>Generar otro QR</span>
+            </button>
+          )}
         </div>
       </div>
     </div>

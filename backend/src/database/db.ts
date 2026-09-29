@@ -587,6 +587,12 @@ export const dbOps = {
     }
   },
 
+  resetTwoFactorAuth(): void {
+    memoryDb.two_factor_auth = undefined;
+    memoryDb.device_sessions = {};
+    saveDatabase();
+  },
+
   verifyAndConsumeBackupCode(code: string): boolean {
     if (!memoryDb.two_factor_auth || !memoryDb.two_factor_auth.enabled) return false;
     const cleanCode = code.trim().toUpperCase();

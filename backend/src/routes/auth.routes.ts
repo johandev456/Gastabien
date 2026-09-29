@@ -167,6 +167,16 @@ router.post('/2fa/verify', (req, res) => {
   });
 });
 
+// Reset / Reconfigure 2FA from scratch
+router.post('/2fa/reset', (req, res) => {
+  dbOps.resetTwoFactorAuth();
+  pendingSetup = null;
+  return res.json({
+    success: true,
+    message: '2FA ha sido reiniciado. Ahora puedes configurar tu código QR nuevo desde cero.'
+  });
+});
+
 // Logout / Revoke device session
 router.post('/2fa/logout', (req, res) => {
   const authHeader = req.headers.authorization;

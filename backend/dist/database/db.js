@@ -487,6 +487,11 @@ exports.dbOps = {
             saveDatabase();
         }
     },
+    resetTwoFactorAuth() {
+        memoryDb.two_factor_auth = undefined;
+        memoryDb.device_sessions = {};
+        saveDatabase();
+    },
     verifyAndConsumeBackupCode(code) {
         if (!memoryDb.two_factor_auth || !memoryDb.two_factor_auth.enabled)
             return false;

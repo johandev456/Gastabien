@@ -143,6 +143,13 @@ export class ApiClient {
     return res;
   }
 
+  public static async reset2FA(): Promise<{ success: boolean; message: string }> {
+    this.clearSessionToken();
+    return this.request<{ success: boolean; message: string }>('/auth/2fa/reset', {
+      method: 'POST'
+    });
+  }
+
   public static async logout2FA(): Promise<{ success: boolean }> {
     try {
       const token = this.getSessionToken();
