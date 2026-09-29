@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Transaction, BankCode, Category } from '../types';
+import { Edit, Trash2, X, Check, TrendingUp, TrendingDown, Store, FileText } from 'lucide-react';
 
 interface TransactionListProps {
   transactions: Transaction[];
@@ -45,17 +46,23 @@ export const TransactionList: React.FC<TransactionListProps> = ({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [tempCategory, setTempCategory] = useState<Category>('Otros Gastos');
 
-  // Edit Amount Modal State
+  // Edit Modal State
   const [editingTx, setEditingTx] = useState<Transaction | null>(null);
+  const [editMerchantValue, setEditMerchantValue] = useState<string>('');
   const [editAmountValue, setEditAmountValue] = useState<string>('');
   const [editCurrencyValue, setEditCurrencyValue] = useState<'DOP' | 'USD'>('DOP');
   const [editCategoryValue, setEditCategoryValue] = useState<Category>('Otros Gastos');
+  const [editTypeValue, setEditTypeValue] = useState<'EXPENSE' | 'INCOME'>('EXPENSE');
+  const [editNotesValue, setEditNotesValue] = useState<string>('');
 
   const handleOpenEdit = (tx: Transaction) => {
     setEditingTx(tx);
+    setEditMerchantValue(tx.merchant || '');
     setEditAmountValue(tx.amount.toString());
     setEditCurrencyValue(tx.currency || 'DOP');
     setEditCategoryValue(tx.category || 'Otros Gastos');
+    setEditTypeValue((tx.type as 'EXPENSE' | 'INCOME') || 'EXPENSE');
+    setEditNotesValue(tx.notes || '');
   };
 
   const handleSaveEdit = (e?: React.FormEvent) => {
@@ -68,14 +75,24 @@ export const TransactionList: React.FC<TransactionListProps> = ({
     }
     if (onUpdateTransaction) {
       onUpdateTransaction(editingTx.id, {
+        merchant: editMerchantValue.trim() || editingTx.merchant,
         amount: num,
         currency: editCurrencyValue,
-        category: editCategoryValue
+        category: editCategoryValue,
+        type: editTypeValue,
+        notes: editNotesValue.trim() || undefined
       });
     } else if (onUpdateCategory && editCategoryValue !== editingTx.category) {
       onUpdateCategory(editingTx.id, editCategoryValue);
     }
     setEditingTx(null);
+  };
+
+  const handleDeleteFromModal = () => {
+    if (!editingTx) return;
+    const txId = editingTx.id;
+    setEditingTx(null);
+    onDelete(txId);
   };
 
   // Sync internal category with external prop
@@ -252,13 +269,13 @@ export const TransactionList: React.FC<TransactionListProps> = ({
                       {tx.category}
                     </p>
                   </div>
-                  <div className="flex items-center justify-between pt-1 border-t border-outline-variant/10">
+                  <div className="flex items-center justify-between pt-2 border-t border-outline-variant/10">
                     <span className="font-label-sm text-[11px] text-secondary font-medium flex items-center gap-1">
                       <span className="material-symbols-outlined text-[14px]">check</span>
                       {isIncome ? 'Aplicado' : 'Validado'}
                     </span>
-                    <div className="flex items-center gap-2">
-                      <div className="flex flex-col items-end">
+                    <div className="flex items-center gap-1.5">
+                      <div className="flex flex-col items-end mr-1">
                         <span className={`font-mono-metric text-[14px] font-bold ${
                           isIncome ? 'text-secondary' : 'text-error'
                         }`}>
@@ -272,10 +289,17 @@ export const TransactionList: React.FC<TransactionListProps> = ({
                       </div>
                       <button
                         onClick={() => handleOpenEdit(tx)}
-                        className="p-1 rounded-lg text-on-surface-variant/70 hover:text-primary hover:bg-surface-container-highest transition-colors cursor-pointer"
-                        title="Modificar monto"
+                        className="p-1.5 rounded-lg text-slate-400 hover:text-emerald-400 hover:bg-emerald-500/10 transition-all cursor-pointer"
+                        title="Modificar movimiento"
                       >
-                        <span className="material-symbols-outlined text-[15px]">edit</span>
+                        <Edit className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        onClick={() => onDelete(tx.id)}
+                        className="p-1.5 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 transition-all cursor-pointer"
+                        title="Eliminar movimiento"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
                       </button>
                     </div>
                   </div>
@@ -465,20 +489,20 @@ export const TransactionList: React.FC<TransactionListProps> = ({
 
                         {/* Actions */}
                         <td className="py-3 px-4 text-center whitespace-nowrap">
-                          <div className="flex items-center justify-center gap-1">
+                          <div className="flex items-center justify-center gap-1.5">
                             <button
                               onClick={() => handleOpenEdit(tx)}
-                              className="p-1.5 rounded-lg text-on-surface-variant hover:text-primary hover:bg-primary-container/20 transition-all cursor-pointer opacity-80 group-hover:opacity-100"
-                              title="Modificar monto"
+                              className="p-1.5 rounded-lg text-slate-400 hover:text-emerald-400 hover:bg-emerald-500/10 transition-all cursor-pointer opacity-80 group-hover:opacity-100"
+                              title="Modificar movimiento"
                             >
-                              <span className="material-symbols-outlined text-[16px]">edit</span>
+                              <Edit className="w-4 h-4" />
                             </button>
                             <button
                               onClick={() => onDelete(tx.id)}
-                              className="p-1.5 rounded-lg text-on-surface-variant hover:text-error hover:bg-error-container/20 transition-all cursor-pointer opacity-80 group-hover:opacity-100"
+                              className="p-1.5 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 transition-all cursor-pointer opacity-80 group-hover:opacity-100"
                               title="Eliminar movimiento"
                             >
-                              <span className="material-symbols-outlined text-[16px]">delete</span>
+                              <Trash2 className="w-4 h-4" />
                             </button>
                           </div>
                         </td>
@@ -492,128 +516,217 @@ export const TransactionList: React.FC<TransactionListProps> = ({
         </div>
       )}
 
-      {/* Edit Amount & Currency Modal */}
+      {/* Edit Transaction Modal */}
       {editingTx && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-          <div className="relative w-full max-w-md bg-surface-container border border-outline-variant/30 rounded-2xl p-6 shadow-[0_20px_50px_rgba(0,0,0,0.6)] flex flex-col gap-5">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fade-in">
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-lg p-6 shadow-2xl relative">
             {/* Header */}
-            <div className="flex items-center justify-between border-b border-outline-variant/15 pb-3">
-              <div className="flex items-center gap-2.5">
-                <div className="p-2 rounded-xl bg-primary/10 text-primary">
-                  <span className="material-symbols-outlined text-[20px]">edit</span>
+            <div className="flex items-center justify-between pb-4 border-b border-slate-800">
+              <div className="flex items-center gap-3">
+                <div className={`p-2.5 rounded-2xl ${
+                  editTypeValue === 'INCOME'
+                    ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                    : 'bg-rose-500/20 text-rose-400 border border-rose-500/30'
+                }`}>
+                  {editTypeValue === 'INCOME' ? <TrendingUp className="w-5 h-5" /> : <TrendingDown className="w-5 h-5" />}
                 </div>
                 <div>
-                  <h3 className="font-title-md text-on-surface font-semibold text-[16px]">
-                    Modificar Transacción
+                  <h3 className="text-lg font-bold text-white tracking-tight">
+                    Editar Movimiento
                   </h3>
-                  <p className="font-label-sm text-on-surface-variant text-[12px]">
-                    {editingTx.merchant} • {formatDate(editingTx.date)}
+                  <p className="text-xs text-slate-400">
+                    {editingTx.bankName || editingTx.bank} • {formatDate(editingTx.date)}
                   </p>
                 </div>
               </div>
               <button
                 onClick={() => setEditingTx(null)}
-                className="p-1.5 rounded-lg text-on-surface-variant hover:text-on-surface hover:bg-surface-container-highest transition-colors cursor-pointer"
+                className="p-1.5 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
               >
-                <span className="material-symbols-outlined text-[20px]">close</span>
+                <X className="w-5 h-5" />
               </button>
             </div>
 
             {/* Form */}
-            <form onSubmit={handleSaveEdit} className="flex flex-col gap-4">
-              {/* Currency Toggle */}
-              <div>
-                <label className="block font-label-md text-on-surface-variant text-[12px] font-medium mb-1.5">
-                  Moneda
-                </label>
-                <div className="grid grid-cols-2 gap-2 p-1 bg-surface-container-highest rounded-xl border border-outline-variant/20">
-                  <button
-                    type="button"
-                    onClick={() => setEditCurrencyValue('DOP')}
-                    className={`py-2 rounded-lg text-[13px] font-semibold transition-all ${
-                      editCurrencyValue === 'DOP'
-                        ? 'bg-primary text-on-primary shadow-sm'
-                        : 'text-on-surface-variant hover:text-on-surface'
-                    }`}
-                  >
-                    DOP (RD$)
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setEditCurrencyValue('USD')}
-                    className={`py-2 rounded-lg text-[13px] font-semibold transition-all ${
-                      editCurrencyValue === 'USD'
-                        ? 'bg-primary text-on-primary shadow-sm'
-                        : 'text-on-surface-variant hover:text-on-surface'
-                    }`}
-                  >
-                    USD ($)
-                  </button>
-                </div>
+            <form onSubmit={handleSaveEdit} className="mt-5 space-y-4">
+              {/* Type Switcher */}
+              <div className="grid grid-cols-2 gap-2 p-1 bg-slate-950 rounded-2xl border border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setEditTypeValue('EXPENSE')}
+                  className={`py-2 text-xs font-semibold rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                    editTypeValue === 'EXPENSE'
+                      ? 'bg-rose-600 text-white shadow-md'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  <TrendingDown className="w-3.5 h-3.5" />
+                  <span>Gasto (-)</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setEditTypeValue('INCOME')}
+                  className={`py-2 text-xs font-semibold rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                    editTypeValue === 'INCOME'
+                      ? 'bg-emerald-600 text-white shadow-md'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  <TrendingUp className="w-3.5 h-3.5" />
+                  <span>Ingreso (+)</span>
+                </button>
               </div>
 
-              {/* Amount Input */}
+              {/* Merchant / Description Input */}
               <div>
-                <label className="block font-label-md text-on-surface-variant text-[12px] font-medium mb-1.5">
-                  Monto ({editCurrencyValue})
+                <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                  Comercio / Concepto
                 </label>
                 <div className="relative">
-                  <span className="absolute left-3.5 top-1/2 -translate-y-1/2 font-mono-metric font-bold text-on-surface-variant text-[16px]">
-                    {editCurrencyValue === 'USD' ? '$' : 'RD$'}
-                  </span>
+                  <Store className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                   <input
-                    type="number"
-                    step="0.01"
-                    min="0.01"
+                    type="text"
                     required
-                    autoFocus
-                    value={editAmountValue}
-                    onChange={(e) => setEditAmountValue(e.target.value)}
-                    placeholder="0.00"
-                    className="w-full bg-surface-container-highest border border-outline-variant/30 rounded-xl pl-14 pr-4 py-3 text-on-surface font-mono-metric font-bold text-[18px] outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all"
+                    value={editMerchantValue}
+                    onChange={(e) => setEditMerchantValue(e.target.value)}
+                    placeholder="Ej. Supermercados Bravo, Shell, Nómina..."
+                    className="w-full bg-slate-950 border border-slate-800 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 rounded-xl pl-10 pr-4 py-2.5 text-sm text-white placeholder-slate-500 outline-none transition-all"
                   />
                 </div>
-                {editCurrencyValue === 'USD' && (
-                  <p className="mt-1.5 font-label-sm text-[12px] text-secondary font-medium">
-                    ≈ RD$ {new Intl.NumberFormat('es-DO', { minimumFractionDigits: 2 }).format((parseFloat(editAmountValue) || 0) * 60.0)} DOP (Tasa estimada 60.00)
-                  </p>
-                )}
               </div>
 
-              {/* Category selector */}
+              {/* Currency & Amount Grid */}
+              <div className="grid grid-cols-1 sm:grid-cols-12 gap-3">
+                {/* Currency */}
+                <div className="sm:col-span-4">
+                  <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                    Moneda
+                  </label>
+                  <div className="grid grid-cols-2 gap-1 p-1 bg-slate-950 rounded-xl border border-slate-800">
+                    <button
+                      type="button"
+                      onClick={() => setEditCurrencyValue('DOP')}
+                      className={`py-2 text-xs font-bold rounded-lg transition-all cursor-pointer ${
+                        editCurrencyValue === 'DOP'
+                          ? 'bg-emerald-600 text-white shadow'
+                          : 'text-slate-400 hover:text-white'
+                      }`}
+                    >
+                      DOP
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setEditCurrencyValue('USD')}
+                      className={`py-2 text-xs font-bold rounded-lg transition-all cursor-pointer ${
+                        editCurrencyValue === 'USD'
+                          ? 'bg-emerald-600 text-white shadow'
+                          : 'text-slate-400 hover:text-white'
+                      }`}
+                    >
+                      USD
+                    </button>
+                  </div>
+                </div>
+
+                {/* Amount */}
+                <div className="sm:col-span-8">
+                  <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                    Monto ({editCurrencyValue})
+                  </label>
+                  <div className="relative">
+                    <span className="absolute left-3.5 top-1/2 -translate-y-1/2 font-mono font-bold text-slate-400 text-sm">
+                      {editCurrencyValue === 'USD' ? '$' : 'RD$'}
+                    </span>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0.01"
+                      required
+                      autoFocus
+                      value={editAmountValue}
+                      onChange={(e) => setEditAmountValue(e.target.value)}
+                      placeholder="0.00"
+                      className="w-full bg-slate-950 border border-slate-800 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 rounded-xl pl-12 pr-4 py-2.5 text-base font-bold text-white placeholder-slate-500 outline-none transition-all font-mono"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Real-time USD to DOP Conversion note */}
+              {editCurrencyValue === 'USD' && (
+                <div className="px-3 py-2 rounded-xl bg-emerald-950/40 border border-emerald-800/40 text-emerald-400 text-xs flex items-center justify-between font-mono">
+                  <span>Conversión a DOP (Tasa ~60.00):</span>
+                  <strong className="text-sm">
+                    RD$ {new Intl.NumberFormat('es-DO', { minimumFractionDigits: 2 }).format((parseFloat(editAmountValue) || 0) * 60.0)}
+                  </strong>
+                </div>
+              )}
+
+              {/* Category */}
               <div>
-                <label className="block font-label-md text-on-surface-variant text-[12px] font-medium mb-1.5">
+                <label className="block text-xs font-semibold text-slate-300 mb-1.5">
                   Categoría
                 </label>
                 <select
                   value={editCategoryValue}
                   onChange={(e) => setEditCategoryValue(e.target.value as Category)}
-                  className="w-full bg-surface-container-highest border border-outline-variant/30 rounded-xl px-3 py-2.5 text-on-surface font-body-sm text-[13px] outline-none focus:border-primary cursor-pointer"
+                  className="w-full bg-slate-950 border border-slate-800 focus:border-emerald-500 rounded-xl px-3.5 py-2.5 text-sm text-white outline-none cursor-pointer"
                 >
                   {CATEGORIES.map((c) => (
-                    <option key={c} value={c}>
+                    <option key={c} value={c} className="bg-slate-900 text-white">
                       {c}
                     </option>
                   ))}
                 </select>
               </div>
 
-              {/* Actions */}
-              <div className="flex items-center justify-end gap-3 pt-3 border-t border-outline-variant/15 mt-2">
+              {/* Optional Notes */}
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                  Notas / Referencia (Opcional)
+                </label>
+                <div className="relative">
+                  <FileText className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                  <input
+                    type="text"
+                    value={editNotesValue}
+                    onChange={(e) => setEditNotesValue(e.target.value)}
+                    placeholder="Ej. Ref 152341, Factura 004..."
+                    className="w-full bg-slate-950 border border-slate-800 focus:border-emerald-500 rounded-xl pl-10 pr-4 py-2.5 text-xs text-white placeholder-slate-500 outline-none transition-all"
+                  />
+                </div>
+              </div>
+
+              {/* Modal Footer */}
+              <div className="flex items-center justify-between pt-4 border-t border-slate-800 mt-5">
+                {/* Delete button inside modal */}
                 <button
                   type="button"
-                  onClick={() => setEditingTx(null)}
-                  className="px-4 py-2.5 rounded-xl border border-outline-variant/30 text-on-surface font-label-md text-[13px] font-semibold hover:bg-surface-container-highest transition-colors cursor-pointer"
+                  onClick={handleDeleteFromModal}
+                  className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-rose-400 hover:text-rose-300 hover:bg-rose-500/15 border border-rose-500/30 text-xs font-semibold transition-all cursor-pointer shadow-sm"
+                  title="Eliminar este movimiento permanentemente"
                 >
-                  Cancelar
+                  <Trash2 className="w-4 h-4" />
+                  <span>Eliminar Movimiento</span>
                 </button>
-                <button
-                  type="submit"
-                  className="px-5 py-2.5 rounded-xl bg-primary text-on-primary font-label-md text-[13px] font-bold shadow-lg hover:opacity-95 active:scale-[0.98] transition-all cursor-pointer flex items-center gap-1.5"
-                >
-                  <span className="material-symbols-outlined text-[16px]">save</span>
-                  <span>Guardar Cambios</span>
-                </button>
+
+                {/* Save and Cancel buttons */}
+                <div className="flex items-center gap-2.5">
+                  <button
+                    type="button"
+                    onClick={() => setEditingTx(null)}
+                    className="px-4 py-2 rounded-xl border border-slate-700 text-slate-300 hover:bg-slate-800 text-xs font-semibold transition-all cursor-pointer"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="submit"
+                    className="inline-flex items-center gap-1.5 px-5 py-2 rounded-xl bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-400 hover:to-emerald-500 text-slate-950 text-xs font-bold shadow-lg shadow-emerald-500/25 transition-all cursor-pointer"
+                  >
+                    <Check className="w-4 h-4" />
+                    <span>Guardar Cambios</span>
+                  </button>
+                </div>
               </div>
             </form>
           </div>
