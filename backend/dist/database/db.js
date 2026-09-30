@@ -49,11 +49,12 @@ function saveDatabase() {
 }
 async function initDatabase() {
     let loadedData = null;
+    let supabaseData = null;
     // 1. Primary Cloud Store: Load from Supabase if configured
     if ((0, supabase_1.isSupabaseConfigured)()) {
         try {
             console.log('[DATABASE] Verificando conexión y cargando datos desde Supabase Cloud...');
-            const supabaseData = await supabase_1.supabaseOps.loadAll();
+            supabaseData = await supabase_1.supabaseOps.loadAll();
             if (supabaseData && (Object.keys(supabaseData.transactions).length > 0 || supabaseData.two_factor_auth)) {
                 loadedData = supabaseData;
                 console.log(`[DATABASE] ✅ Cargado exitosamente desde Supabase Cloud: ${Object.keys(supabaseData.transactions).length} transacciones.`);
@@ -126,6 +127,16 @@ async function initDatabase() {
         }
         if (changed) {
             saveDatabase();
+        }
+        // If Supabase is connected and was initially empty, sync local store data up to Supabase Cloud
+        if ((0, supabase_1.isSupabaseConfigured)() && (!supabaseData || Object.keys(supabaseData.transactions).length === 0)) {
+            console.log(`[SUPABASE] Sincronizando ${Object.keys(memoryDb.transactions).length} transacciones iniciales a Supabase Cloud...`);
+            for (const tx of Object.values(memoryDb.transactions)) {
+                supabase_1.supabaseOps.upsertTransaction(tx).catch(() => { });
+            }
+            for (const u of Object.values(memoryDb.users)) {
+                supabase_1.supabaseOps.saveUser(u).catch(() => { });
+            }
         }
     }
     // 4. Check for GASTABIEN_2FA_SECRET environment variable override

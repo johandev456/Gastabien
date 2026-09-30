@@ -107,12 +107,13 @@ function saveDatabase() {
 
 export async function initDatabase() {
   let loadedData: DatabaseSchema | null = null;
+  let supabaseData: any = null;
 
   // 1. Primary Cloud Store: Load from Supabase if configured
   if (isSupabaseConfigured()) {
     try {
       console.log('[DATABASE] Verificando conexión y cargando datos desde Supabase Cloud...');
-      const supabaseData = await supabaseOps.loadAll();
+      supabaseData = await supabaseOps.loadAll();
       if (supabaseData && (Object.keys(supabaseData.transactions).length > 0 || supabaseData.two_factor_auth)) {
         loadedData = supabaseData;
         console.log(`[DATABASE] ✅ Cargado exitosamente desde Supabase Cloud: ${Object.keys(supabaseData.transactions).length} transacciones.`);
@@ -123,6 +124,7 @@ export async function initDatabase() {
       console.error('[DATABASE] Error conectando a Supabase Cloud:', err);
     }
   }
+
 
   // 2. Secondary Local Store: Load from gastabien_store.json / seed.json
   if (!loadedData) {
@@ -185,7 +187,19 @@ export async function initDatabase() {
     if (changed) {
       saveDatabase();
     }
+
+    // If Supabase is connected and was initially empty, sync local store data up to Supabase Cloud
+    if (isSupabaseConfigured() && (!supabaseData || Object.keys(supabaseData.transactions).length === 0)) {
+      console.log(`[SUPABASE] Sincronizando ${Object.keys(memoryDb.transactions).length} transacciones iniciales a Supabase Cloud...`);
+      for (const tx of Object.values(memoryDb.transactions)) {
+        supabaseOps.upsertTransaction(tx).catch(() => {});
+      }
+      for (const u of Object.values(memoryDb.users)) {
+        supabaseOps.saveUser(u).catch(() => {});
+      }
+    }
   }
+
 
   // 4. Check for GASTABIEN_2FA_SECRET environment variable override
   if (process.env.GASTABIEN_2FA_SECRET) {
