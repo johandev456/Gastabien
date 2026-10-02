@@ -114,3 +114,34 @@ fun getCategoryTheme(categoryName: String): CategoryTheme {
         }
     }
 }
+
+fun formatTransactionDate(rawDate: String?): String {
+    if (rawDate.isNullOrBlank()) return ""
+    try {
+        val clean = rawDate.replace("T", " ").replace("Z", "").trim()
+        val datePart = clean.split(" ")[0]
+        val parts = datePart.split("-")
+        if (parts.size == 3) {
+            val year = parts[0]
+            val month = when (parts[1]) {
+                "01" -> "Ene"
+                "02" -> "Feb"
+                "03" -> "Mar"
+                "04" -> "Abr"
+                "05" -> "May"
+                "06" -> "Jun"
+                "07" -> "Jul"
+                "08" -> "Ago"
+                "09" -> "Sep"
+                "10" -> "Oct"
+                "11" -> "Nov"
+                "12" -> "Dic"
+                else -> parts[1]
+            }
+            val day = parts[2].toIntOrNull()?.toString() ?: parts[2]
+            return "$day $month $year"
+        }
+    } catch (_: Exception) {}
+    return rawDate.take(10)
+}
+

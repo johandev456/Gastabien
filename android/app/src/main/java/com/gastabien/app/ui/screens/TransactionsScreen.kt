@@ -344,7 +344,8 @@ fun TransactionDetailCard(
                     fontSize = 14.sp,
                     fontWeight = FontWeight.Bold,
                     color = OnSurface,
-                    maxLines = 1
+                    maxLines = 1,
+                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
                 )
                 Spacer(modifier = Modifier.height(2.dp))
                 Row(
@@ -368,15 +369,45 @@ fun TransactionDetailCard(
                         color = OnSurfaceVariant
                     )
                 }
-                if (!tx.accountReference.isNullOrBlank()) {
-                    Spacer(modifier = Modifier.height(1.dp))
-                    Text(
-                        text = tx.accountReference,
-                        fontSize = 10.sp,
-                        color = Secondary
-                    )
+                val formattedDate = com.gastabien.app.ui.components.formatTransactionDate(tx.date)
+                if (formattedDate.isNotEmpty() || !tx.accountReference.isNullOrBlank()) {
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        if (formattedDate.isNotEmpty()) {
+                            Icon(
+                                imageVector = Icons.Default.CalendarToday,
+                                contentDescription = null,
+                                tint = OnSurfaceVariant.copy(alpha = 0.8f),
+                                modifier = Modifier.size(10.dp)
+                            )
+                            Text(
+                                text = formattedDate,
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = OnSurfaceVariant
+                            )
+                        }
+                        if (!tx.accountReference.isNullOrBlank()) {
+                            if (formattedDate.isNotEmpty()) {
+                                Text(
+                                    text = "•",
+                                    fontSize = 10.sp,
+                                    color = OnSurfaceVariant
+                                )
+                            }
+                            Text(
+                                text = tx.accountReference,
+                                fontSize = 10.sp,
+                                color = Secondary
+                            )
+                        }
+                    }
                 }
             }
+
 
             Column(horizontalAlignment = Alignment.End) {
                 val isUsd = tx.currency.equals("USD", ignoreCase = true)

@@ -708,13 +708,15 @@ fun TopCategoryComparisonCard(
                                         maxLines = 1,
                                         overflow = TextOverflow.Ellipsis
                                     )
+                                    val formattedDate = com.gastabien.app.ui.components.formatTransactionDate(tx.date)
                                     Text(
-                                        text = "• ${tx.bankName}",
+                                        text = "• ${tx.bankName}${if (formattedDate.isNotEmpty()) " • $formattedDate" else ""}",
                                         fontSize = 10.sp,
                                         color = OnSurfaceVariant,
                                         maxLines = 1
                                     )
                                 }
+
 
                                 if (isUsd) {
                                     Text(
@@ -1154,7 +1156,8 @@ fun RecentTransactionItem(tx: Transaction, dopFormat: NumberFormat) {
                     fontSize = 14.sp,
                     fontWeight = FontWeight.SemiBold,
                     color = OnSurface,
-                    maxLines = 1
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
                 Spacer(modifier = Modifier.height(2.dp))
                 Row(
@@ -1178,7 +1181,29 @@ fun RecentTransactionItem(tx: Transaction, dopFormat: NumberFormat) {
                         color = OnSurfaceVariant
                     )
                 }
+                val formattedDate = com.gastabien.app.ui.components.formatTransactionDate(tx.date)
+                if (formattedDate.isNotEmpty()) {
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(3.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.CalendarToday,
+                            contentDescription = null,
+                            tint = OnSurfaceVariant.copy(alpha = 0.8f),
+                            modifier = Modifier.size(10.dp)
+                        )
+                        Text(
+                            text = formattedDate,
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = OnSurfaceVariant
+                        )
+                    }
+                }
             }
+
 
             Column(horizontalAlignment = Alignment.End) {
                 val isUsd = tx.currency.equals("USD", ignoreCase = true)
