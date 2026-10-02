@@ -8,7 +8,8 @@ interface ApiService {
     @GET("api/analytics/summary")
     suspend fun getSummary(
         @Header("x-user-id") userId: String = "demo-user-id",
-        @Query("bank") bank: String? = null
+        @Query("bank") bank: String? = null,
+        @Query("month") month: String? = null
     ): AnalyticsSummary
 
     @GET("api/transactions")
@@ -17,8 +18,10 @@ interface ApiService {
         @Query("bank") bank: String? = null,
         @Query("category") category: String? = null,
         @Query("type") type: String? = null,
+        @Query("month") month: String? = null,
         @Query("search") search: String? = null
     ): TransactionResponse
+
 
     @POST("api/transactions")
     suspend fun createTransaction(

@@ -8,6 +8,7 @@ import { AddTransactionModal } from './components/AddTransactionModal';
 import { BankConnectionModal } from './components/BankConnectionModal';
 import { StatementSyncModal } from './components/StatementSyncModal';
 import { BankFilterBar } from './components/BankFilterBar';
+import { MonthFilterBar } from './components/MonthFilterBar';
 import { TwoFactorLockScreen } from './components/TwoFactorLockScreen';
 import { ApiClient } from './api/client';
 import { AnalyticsSummary, Transaction, Category } from './types';
@@ -36,6 +37,7 @@ export function App() {
   });
 
   const [selectedBanks, setSelectedBanks] = useState<string[]>([]);
+  const [selectedMonth, setSelectedMonth] = useState<string>('ALL');
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
@@ -93,17 +95,18 @@ export function App() {
     };
   }, []);
 
-  const loadData = async (banksToFilter = selectedBanks) => {
+  const loadData = async (banksToFilter = selectedBanks, monthToFilter = selectedMonth) => {
     if (!ApiClient.hasSessionToken() && !isAuthenticated) {
       return;
     }
     try {
       setLoading(true);
       const bankParam = banksToFilter.length === 1 && banksToFilter[0] !== 'ALL' ? (banksToFilter[0] as any) : undefined;
+      const monthParam = monthToFilter !== 'ALL' ? monthToFilter : undefined;
 
       const [sumRes, txRes, authRes] = await Promise.allSettled([
-        ApiClient.getSummary(banksToFilter),
-        ApiClient.getTransactions({ bank: bankParam }),
+        ApiClient.getSummary(banksToFilter, monthParam),
+        ApiClient.getTransactions({ bank: bankParam, month: monthParam }),
         ApiClient.getAuthStatus()
       ]);
 
@@ -118,8 +121,11 @@ export function App() {
         if (banksToFilter.length > 0 && !banksToFilter.includes('ALL')) {
           list = list.filter(tx => banksToFilter.includes(tx.bank));
         }
+        if (monthToFilter && monthToFilter !== 'ALL') {
+          list = list.filter(tx => tx.date && tx.date.substring(0, 7) === monthToFilter);
+        }
         setTransactions(list);
-        if (banksToFilter.length === 0 || banksToFilter.includes('ALL')) {
+        if ((banksToFilter.length === 0 || banksToFilter.includes('ALL')) && monthToFilter === 'ALL') {
           try {
             localStorage.setItem('gastabien_cached_transactions', JSON.stringify(list));
           } catch {}
@@ -137,8 +143,9 @@ export function App() {
 
   useEffect(() => {
     if (isAuthenticated) {
-      loadData(selectedBanks);
+      loadData(selectedBanks, selectedMonth);
     }
+
 
     // Check for auth callback in URL
     const urlParams = new URLSearchParams(window.location.search);
@@ -159,7 +166,7 @@ export function App() {
       showToast('error', `Error al vincular Gmail: ${urlParams.get('auth_error')}`);
       window.history.replaceState({}, document.title, window.location.pathname);
     }
-  }, [selectedBanks, isAuthenticated]);
+  }, [selectedBanks, selectedMonth, isAuthenticated]);
 
   const handleToggleBank = (bankCode: string) => {
     let nextBanks: string[];
@@ -193,7 +200,7 @@ export function App() {
       } else {
         showToast('error', 'Gmail no está vinculado aún. Conecta Gmail en "Configurar Bancos" o sube tu Estado de Cuenta.');
       }
-      await loadData(selectedBanks);
+      await loadData(selectedBanks, selectedMonth);
     } catch {
       showToast('error', 'Error al sincronizar con el servidor.');
     } finally {
@@ -205,7 +212,7 @@ export function App() {
     try {
       await ApiClient.createTransaction(data);
       showToast('success', 'Movimiento registrado correctamente.');
-      await loadData(selectedBanks);
+      await loadData(selectedBanks, selectedMonth);
     } catch {
       showToast('error', 'Error al crear la transacción');
     }
@@ -215,7 +222,7 @@ export function App() {
     try {
       await ApiClient.updateTransaction(id, { category: newCategory });
       showToast('success', 'Categoría actualizada');
-      await loadData(selectedBanks);
+      await loadData(selectedBanks, selectedMonth);
     } catch {
       showToast('error', 'Error al actualizar categoría');
     }
@@ -225,7 +232,7 @@ export function App() {
     try {
       await ApiClient.updateTransaction(id, updates);
       showToast('success', 'Movimiento actualizado correctamente.');
-      await loadData(selectedBanks);
+      await loadData(selectedBanks, selectedMonth);
     } catch {
       showToast('error', 'Error al actualizar el movimiento');
     }
@@ -236,7 +243,7 @@ export function App() {
     try {
       await ApiClient.deleteTransaction(id);
       showToast('success', 'Movimiento eliminado');
-      await loadData(selectedBanks);
+      await loadData(selectedBanks, selectedMonth);
     } catch {
       showToast('error', 'Error al eliminar movimiento');
     }
@@ -249,8 +256,9 @@ export function App() {
     try {
       await ApiClient.clearAllTransactions();
       showToast('success', 'Todas las transacciones han sido eliminadas correctamente.');
-      await loadData(selectedBanks);
+      await loadData(selectedBanks, selectedMonth);
     } catch {
+
       showToast('error', 'Error al borrar las transacciones.');
     }
   };
@@ -396,15 +404,23 @@ export function App() {
           </div>
         </div>
 
-        {/* Bank Segmented Filter Bar */}
-        <BankFilterBar
-          selectedBanks={selectedBanks}
-          onToggleBank={handleToggleBank}
-          onSelectAll={handleSelectAllBanks}
-        />
+        {/* Unified Filter Controls: Meses & Bancos */}
+        <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
+          <MonthFilterBar
+            availableMonths={summary?.availableMonths}
+            selectedMonth={selectedMonth}
+            onSelectMonth={setSelectedMonth}
+          />
+          <BankFilterBar
+            selectedBanks={selectedBanks}
+            onToggleBank={handleToggleBank}
+            onSelectAll={handleSelectAllBanks}
+          />
+        </div>
 
         {/* 4 Bento KPI Summary Cards */}
         <SummaryCards summary={summary} loading={loading} />
+
 
         {/* 2-Column Analytics Bento */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">

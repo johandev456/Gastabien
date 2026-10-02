@@ -20,13 +20,37 @@ function enrichTransaction(tx) {
     };
 }
 class TransactionService {
-    getAnalyticsSummary(userId, filterBanks) {
-        let rawTransactions = db_1.dbOps.getTransactions(userId);
-        // Apply bank filter if specified
-        if (filterBanks && filterBanks.length > 0) {
-            rawTransactions = rawTransactions.filter(tx => filterBanks.includes(tx.bank));
+    getAnalyticsSummary(userId, filterBanks, filterMonth) {
+        const allRawTransactions = db_1.dbOps.getTransactions(userId).map(enrichTransaction);
+        // Extract all distinct available months from historical transactions
+        const availableMonthsSet = new Set();
+        const monthlyMap = {};
+        for (const tx of allRawTransactions) {
+            if (tx.date && tx.date.length >= 7) {
+                const monthKey = tx.date.substring(0, 7); // YYYY-MM
+                availableMonthsSet.add(monthKey);
+                if (!monthlyMap[monthKey]) {
+                    monthlyMap[monthKey] = { expenses: 0, income: 0 };
+                }
+                const dopAmount = tx.amountInDop ?? getAmountInDop(tx.amount, tx.currency);
+                if (tx.type === 'EXPENSE') {
+                    monthlyMap[monthKey].expenses += dopAmount;
+                }
+                else if (tx.type === 'INCOME') {
+                    monthlyMap[monthKey].income += dopAmount;
+                }
+            }
         }
-        const transactions = rawTransactions.map(enrichTransaction);
+        const availableMonths = Array.from(availableMonthsSet).sort((a, b) => b.localeCompare(a));
+        // Filter transactions by bank
+        let transactions = allRawTransactions;
+        if (filterBanks && filterBanks.length > 0) {
+            transactions = transactions.filter(tx => filterBanks.includes(tx.bank));
+        }
+        // Filter transactions by selected month if active
+        if (filterMonth && filterMonth !== 'ALL') {
+            transactions = transactions.filter(tx => tx.date && tx.date.substring(0, 7) === filterMonth);
+        }
         let totalExpenses = 0;
         let totalIncome = 0;
         const categoryTotals = {};
@@ -37,16 +61,10 @@ class TransactionService {
             QIK: { expenses: 0, income: 0, count: 0 },
             MANUAL: { expenses: 0, income: 0, count: 0 }
         };
-        const monthlyMap = {};
         for (const tx of transactions) {
             const dopAmount = tx.amountInDop ?? getAmountInDop(tx.amount, tx.currency);
-            const monthKey = tx.date.substring(0, 7); // YYYY-MM
-            if (!monthlyMap[monthKey]) {
-                monthlyMap[monthKey] = { expenses: 0, income: 0 };
-            }
             if (tx.type === 'EXPENSE') {
                 totalExpenses += dopAmount;
-                monthlyMap[monthKey].expenses += dopAmount;
                 // Categories
                 if (!categoryTotals[tx.category]) {
                     categoryTotals[tx.category] = { total: 0, count: 0 };
@@ -61,7 +79,6 @@ class TransactionService {
             }
             else if (tx.type === 'INCOME') {
                 totalIncome += dopAmount;
-                monthlyMap[monthKey].income += dopAmount;
                 if (bankTotals[tx.bank]) {
                     bankTotals[tx.bank].income += dopAmount;
                     bankTotals[tx.bank].count += 1;
@@ -95,7 +112,7 @@ class TransactionService {
                 color: config.color
             };
         });
-        // Monthly trends
+        // Monthly trends (last 6 distinct months)
         const monthlyTrend = Object.entries(monthlyMap)
             .sort((a, b) => a[0].localeCompare(b[0]))
             .slice(-6)
@@ -114,7 +131,9 @@ class TransactionService {
             categories,
             byBank,
             recentTransactions: transactions.slice(0, 10),
-            monthlyTrend
+            monthlyTrend,
+            availableMonths,
+            selectedMonth: filterMonth || 'ALL'
         };
     }
 }

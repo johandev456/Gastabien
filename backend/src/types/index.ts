@@ -96,4 +96,6 @@ export interface AnalyticsSummary {
     expenses: number;
     income: number;
   }[];
+  availableMonths?: string[];
+  selectedMonth?: string;
 }

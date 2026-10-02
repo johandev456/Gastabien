@@ -92,14 +92,21 @@ function saveDatabase() {
     fs.writeFileSync(tempFile, jsonStr, 'utf-8');
     fs.renameSync(tempFile, DB_FILE);
 
-    // Also sync to seed files if writable for cold start resilience
+    // Also sync to seed files if writable for cold start resilience (without oauth tokens)
     try {
       if (fs.existsSync(path.dirname(SEED_SRC_FILE))) {
-        fs.writeFileSync(SEED_SRC_FILE, jsonStr, 'utf-8');
+        const sanitizedSeed = {
+          ...memoryDb,
+          users: Object.fromEntries(
+            Object.entries(memoryDb.users).map(([k, u]) => [k, { ...u, google_refresh_token: '', google_access_token: '', token_expiry: 0 }])
+          )
+        };
+        fs.writeFileSync(SEED_SRC_FILE, JSON.stringify(sanitizedSeed, null, 2), 'utf-8');
       }
     } catch {
       // Non-critical fallback
     }
+
   } catch (err) {
     console.error('Error saving database:', err);
   }
@@ -495,7 +502,7 @@ export const dbOps = {
     return newTx;
   },
 
-  getTransactions(userId: string, filters?: { bank?: BankCode; category?: Category; type?: string; search?: string; limit?: number; offset?: number }): Transaction[] {
+  getTransactions(userId: string, filters?: { bank?: BankCode; category?: Category; type?: string; search?: string; month?: string; limit?: number; offset?: number }): Transaction[] {
     let list = Object.values(memoryDb.transactions).filter(tx => tx.userId === userId);
 
     if (filters?.bank) {
@@ -506,6 +513,9 @@ export const dbOps = {
     }
     if (filters?.type) {
       list = list.filter(tx => tx.type === filters.type);
+    }
+    if (filters?.month && filters.month !== 'ALL') {
+      list = list.filter(tx => tx.date && tx.date.substring(0, 7) === filters.month);
     }
     if (filters?.search) {
       const s = filters.search.toLowerCase();
@@ -518,6 +528,7 @@ export const dbOps = {
 
     // Sort by date descending
     list.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
 
     if (filters?.offset) {
       list = list.slice(filters.offset);

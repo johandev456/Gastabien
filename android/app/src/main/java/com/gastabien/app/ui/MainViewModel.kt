@@ -39,6 +39,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _selectedBank = MutableStateFlow("ALL")
     val selectedBank: StateFlow<String> = _selectedBank.asStateFlow()
 
+    private val _selectedMonth = MutableStateFlow("ALL")
+    val selectedMonth: StateFlow<String> = _selectedMonth.asStateFlow()
+
     private val _selectedCategory = MutableStateFlow<String?>("ALL")
     val selectedCategory: StateFlow<String?> = _selectedCategory.asStateFlow()
 
@@ -67,25 +70,34 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         refreshAll()
     }
 
+    fun selectMonth(month: String) {
+        _selectedMonth.value = month
+        refreshAll()
+    }
+
     fun selectCategory(category: String?) {
         _selectedCategory.value = category
     }
 
     fun refreshAll() {
         val bankParam = if (_selectedBank.value == "ALL") null else _selectedBank.value
-        loadSummary(bank = bankParam)
-        loadTransactions(bank = bankParam, search = currentSearch)
+        val monthParam = if (_selectedMonth.value == "ALL") null else _selectedMonth.value
+        loadSummary(bank = bankParam, month = monthParam)
+        loadTransactions(bank = bankParam, month = monthParam, search = currentSearch)
     }
 
-    fun loadSummary(bank: String? = if (_selectedBank.value == "ALL") null else _selectedBank.value) {
+    fun loadSummary(
+        bank: String? = if (_selectedBank.value == "ALL") null else _selectedBank.value,
+        month: String? = if (_selectedMonth.value == "ALL") null else _selectedMonth.value
+    ) {
         viewModelScope.launch {
             if (_summaryState.value !is UiState.Success) {
                 _summaryState.value = UiState.Loading
             }
             try {
-                val summary = api.getSummary(bank = bank)
+                val summary = api.getSummary(bank = bank, month = month)
                 _summaryState.value = UiState.Success(summary)
-                if (bank == null) {
+                if (bank == null && month == null) {
                     localCache.saveSummary(summary)
                 }
             } catch (e: Exception) {
@@ -106,6 +118,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         bank: String? = if (_selectedBank.value == "ALL") null else _selectedBank.value,
         category: String? = null,
         type: String? = null,
+        month: String? = if (_selectedMonth.value == "ALL") null else _selectedMonth.value,
         search: String? = currentSearch
     ) {
         currentSearch = search
@@ -118,10 +131,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     bank = bank,
                     category = category,
                     type = type,
+                    month = month,
                     search = search
                 )
                 _transactionsState.value = UiState.Success(res.transactions)
-                if (bank == null && category == null && type == null && search == null) {
+                if (bank == null && category == null && type == null && month == null && search == null) {
                     localCache.saveTransactions(res.transactions)
                 }
             } catch (e: Exception) {
@@ -137,6 +151,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             }
         }
     }
+
 
     fun loadAuthStatus() {
         viewModelScope.launch {

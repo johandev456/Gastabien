@@ -8,12 +8,13 @@ const router = (0, express_1.Router)();
 // List transactions
 router.get('/', (req, res) => {
     const userId = req.headers['x-user-id'] || req.query.userId || 'demo-user-id';
-    const { bank, category, type, search, limit, offset } = req.query;
+    const { bank, category, type, search, month, limit, offset } = req.query;
     const filters = {
         bank: bank ? bank : undefined,
         category: category ? category : undefined,
         type: type ? type : undefined,
         search: search ? search : undefined,
+        month: month ? month : undefined,
         limit: limit ? parseInt(limit, 10) : undefined,
         offset: offset ? parseInt(offset, 10) : undefined,
     };

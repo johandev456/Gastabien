@@ -167,10 +167,13 @@ export class ApiClient {
   // CORE FINANCIAL API METHODS
   // ==========================================
 
-  public static async getSummary(banks?: string[]): Promise<AnalyticsSummary> {
+  public static async getSummary(banks?: string[], month?: string): Promise<AnalyticsSummary> {
     const params = new URLSearchParams();
     if (banks && banks.length > 0 && !banks.includes('ALL')) {
       params.append('banks', banks.join(','));
+    }
+    if (month && month !== 'ALL') {
+      params.append('month', month);
     }
     const queryStr = params.toString() ? `?${params.toString()}` : '';
     return this.request<AnalyticsSummary>(`/analytics/summary${queryStr}`);
@@ -181,16 +184,19 @@ export class ApiClient {
     category?: Category;
     type?: string;
     search?: string;
+    month?: string;
   }): Promise<{ count: number; transactions: Transaction[] }> {
     const params = new URLSearchParams();
     if (filters?.bank) params.append('bank', filters.bank);
     if (filters?.category) params.append('category', filters.category);
     if (filters?.type) params.append('type', filters.type);
     if (filters?.search) params.append('search', filters.search);
+    if (filters?.month && filters.month !== 'ALL') params.append('month', filters.month);
 
     const queryStr = params.toString() ? `?${params.toString()}` : '';
     return this.request<{ count: number; transactions: Transaction[] }>(`/transactions${queryStr}`);
   }
+
 
   public static async createTransaction(data: {
     merchant: string;

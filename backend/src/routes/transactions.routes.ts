@@ -9,16 +9,18 @@ const router = Router();
 // List transactions
 router.get('/', (req, res) => {
   const userId = (req.headers['x-user-id'] as string) || (req.query.userId as string) || 'demo-user-id';
-  const { bank, category, type, search, limit, offset } = req.query;
+  const { bank, category, type, search, month, limit, offset } = req.query;
 
   const filters = {
     bank: bank ? (bank as BankCode) : undefined,
     category: category ? (category as Category) : undefined,
     type: type ? (type as string) : undefined,
     search: search ? (search as string) : undefined,
+    month: month ? (month as string) : undefined,
     limit: limit ? parseInt(limit as string, 10) : undefined,
     offset: offset ? parseInt(offset as string, 10) : undefined,
   };
+
 
   const rawTransactions = dbOps.getTransactions(userId, filters);
   const transactions = rawTransactions.map(enrichTransaction);

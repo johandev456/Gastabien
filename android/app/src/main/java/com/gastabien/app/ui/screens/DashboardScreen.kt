@@ -31,6 +31,7 @@ import com.gastabien.app.data.models.CategorySummary
 import com.gastabien.app.data.models.Transaction
 import com.gastabien.app.ui.UiState
 import com.gastabien.app.ui.components.BankFilterChips
+import com.gastabien.app.ui.components.MonthFilterChips
 import com.gastabien.app.ui.components.InteractiveDonutChart
 import com.gastabien.app.ui.components.getCategoryTheme
 import com.gastabien.app.ui.theme.*
@@ -43,6 +44,8 @@ fun DashboardScreen(
     summaryState: UiState<AnalyticsSummary>,
     selectedBank: String,
     onSelectBank: (String) -> Unit,
+    selectedMonth: String = "ALL",
+    onSelectMonth: (String) -> Unit = {},
     selectedCategory: String? = null,
     onSelectCategory: (String?) -> Unit,
     isSyncing: Boolean,
@@ -50,6 +53,7 @@ fun DashboardScreen(
     onStatementClick: () -> Unit,
     onAddClick: () -> Unit
 ) {
+
     val dopFormat = NumberFormat.getCurrencyInstance(Locale("es", "DO"))
     var dropdownExpanded by remember { mutableStateOf(false) }
 
@@ -228,14 +232,25 @@ fun DashboardScreen(
                         .padding(horizontal = 16.dp),
                     verticalArrangement = Arrangement.spacedBy(14.dp)
                 ) {
+                    // Month Filter Bar
+                    item {
+                        MonthFilterChips(
+                            availableMonths = summary.availableMonths,
+                            selectedMonth = selectedMonth,
+                            onSelectMonth = onSelectMonth,
+                            modifier = Modifier.padding(top = 4.dp, bottom = 0.dp)
+                        )
+                    }
+
                     // Bank Filter Bar
                     item {
                         BankFilterChips(
                             selectedBank = selectedBank,
                             onSelectBank = onSelectBank,
-                            modifier = Modifier.padding(top = 4.dp, bottom = 2.dp)
+                            modifier = Modifier.padding(top = 0.dp, bottom = 2.dp)
                         )
                     }
+
 
                     // Hero Balance Bento Card
                     item {

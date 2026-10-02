@@ -36,5 +36,8 @@ data class AnalyticsSummary(
     @SerializedName("categories") val categories: List<CategorySummary>,
     @SerializedName("byBank") val byBank: List<BankDistribution>,
     @SerializedName("recentTransactions") val recentTransactions: List<Transaction>,
-    @SerializedName("monthlyTrend") val monthlyTrend: List<MonthlyTrend>
+    @SerializedName("monthlyTrend") val monthlyTrend: List<MonthlyTrend>,
+    @SerializedName("availableMonths") val availableMonths: List<String>? = null,
+    @SerializedName("selectedMonth") val selectedMonth: String? = null
 )
+

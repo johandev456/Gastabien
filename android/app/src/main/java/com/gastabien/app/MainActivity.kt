@@ -22,8 +22,10 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.gastabien.app.data.models.*
 import com.gastabien.app.ui.MainViewModel
+import com.gastabien.app.ui.UiState
 import com.gastabien.app.ui.screens.*
 import com.gastabien.app.ui.theme.*
+
 
 sealed class BottomNavItem(val route: String, val title: String, val icon: ImageVector) {
     object Dashboard : BottomNavItem("dashboard", "Resumen", Icons.Default.Dashboard)
@@ -45,6 +47,7 @@ class MainActivity : ComponentActivity() {
                 val summaryState by viewModel.summaryState.collectAsState()
                 val transactionsState by viewModel.transactionsState.collectAsState()
                 val selectedBank by viewModel.selectedBank.collectAsState()
+                val selectedMonth by viewModel.selectedMonth.collectAsState()
                 val selectedCategory by viewModel.selectedCategory.collectAsState()
                 val isSyncing by viewModel.isSyncing.collectAsState()
                 val syncMessage by viewModel.syncMessage.collectAsState()
@@ -118,6 +121,8 @@ class MainActivity : ComponentActivity() {
                                 summaryState = summaryState,
                                 selectedBank = selectedBank,
                                 onSelectBank = { viewModel.selectBank(it) },
+                                selectedMonth = selectedMonth,
+                                onSelectMonth = { viewModel.selectMonth(it) },
                                 selectedCategory = selectedCategory,
                                 onSelectCategory = { viewModel.selectCategory(it) },
                                 isSyncing = isSyncing,
@@ -131,10 +136,14 @@ class MainActivity : ComponentActivity() {
                             )
                         }
                         composable(BottomNavItem.Transactions.route) {
+                            val months = (summaryState as? UiState.Success)?.data?.availableMonths
                             TransactionsScreen(
                                 transactionsState = transactionsState,
                                 selectedBank = selectedBank,
                                 onSelectBank = { viewModel.selectBank(it) },
+                                availableMonths = months,
+                                selectedMonth = selectedMonth,
+                                onSelectMonth = { viewModel.selectMonth(it) },
                                 selectedCategory = selectedCategory,
                                 onSelectCategory = { viewModel.selectCategory(it) },
                                 onDeleteClick = { id -> viewModel.deleteTransaction(id) },
@@ -145,6 +154,7 @@ class MainActivity : ComponentActivity() {
                                 }
                             )
                         }
+
                         composable(BottomNavItem.Categories.route) {
                             CategoriesScreen(
                                 summaryState = summaryState,

@@ -19,15 +19,42 @@ export function enrichTransaction(tx: Transaction): Transaction {
 }
 
 export class TransactionService {
-  public getAnalyticsSummary(userId: string, filterBanks?: BankCode[]): AnalyticsSummary {
-    let rawTransactions = dbOps.getTransactions(userId);
+  public getAnalyticsSummary(userId: string, filterBanks?: BankCode[], filterMonth?: string): AnalyticsSummary {
+    const allRawTransactions = dbOps.getTransactions(userId).map(enrichTransaction);
 
-    // Apply bank filter if specified
-    if (filterBanks && filterBanks.length > 0) {
-      rawTransactions = rawTransactions.filter(tx => filterBanks.includes(tx.bank));
+    // Extract all distinct available months from historical transactions
+    const availableMonthsSet = new Set<string>();
+    const monthlyMap: Record<string, { expenses: number; income: number }> = {};
+
+    for (const tx of allRawTransactions) {
+      if (tx.date && tx.date.length >= 7) {
+        const monthKey = tx.date.substring(0, 7); // YYYY-MM
+        availableMonthsSet.add(monthKey);
+
+        if (!monthlyMap[monthKey]) {
+          monthlyMap[monthKey] = { expenses: 0, income: 0 };
+        }
+        const dopAmount = tx.amountInDop ?? getAmountInDop(tx.amount, tx.currency);
+        if (tx.type === 'EXPENSE') {
+          monthlyMap[monthKey].expenses += dopAmount;
+        } else if (tx.type === 'INCOME') {
+          monthlyMap[monthKey].income += dopAmount;
+        }
+      }
     }
 
-    const transactions = rawTransactions.map(enrichTransaction);
+    const availableMonths = Array.from(availableMonthsSet).sort((a, b) => b.localeCompare(a));
+
+    // Filter transactions by bank
+    let transactions = allRawTransactions;
+    if (filterBanks && filterBanks.length > 0) {
+      transactions = transactions.filter(tx => filterBanks.includes(tx.bank));
+    }
+
+    // Filter transactions by selected month if active
+    if (filterMonth && filterMonth !== 'ALL') {
+      transactions = transactions.filter(tx => tx.date && tx.date.substring(0, 7) === filterMonth);
+    }
 
     let totalExpenses = 0;
     let totalIncome = 0;
@@ -41,18 +68,11 @@ export class TransactionService {
       MANUAL: { expenses: 0, income: 0, count: 0 }
     };
 
-    const monthlyMap: Record<string, { expenses: number; income: number }> = {};
-
     for (const tx of transactions) {
       const dopAmount = tx.amountInDop ?? getAmountInDop(tx.amount, tx.currency);
-      const monthKey = tx.date.substring(0, 7); // YYYY-MM
-      if (!monthlyMap[monthKey]) {
-        monthlyMap[monthKey] = { expenses: 0, income: 0 };
-      }
 
       if (tx.type === 'EXPENSE') {
         totalExpenses += dopAmount;
-        monthlyMap[monthKey].expenses += dopAmount;
 
         // Categories
         if (!categoryTotals[tx.category]) {
@@ -68,7 +88,6 @@ export class TransactionService {
         }
       } else if (tx.type === 'INCOME') {
         totalIncome += dopAmount;
-        monthlyMap[monthKey].income += dopAmount;
 
         if (bankTotals[tx.bank]) {
           bankTotals[tx.bank].income += dopAmount;
@@ -107,7 +126,7 @@ export class TransactionService {
       };
     });
 
-    // Monthly trends
+    // Monthly trends (last 6 distinct months)
     const monthlyTrend = Object.entries(monthlyMap)
       .sort((a, b) => a[0].localeCompare(b[0]))
       .slice(-6)
@@ -127,7 +146,9 @@ export class TransactionService {
       categories,
       byBank,
       recentTransactions: transactions.slice(0, 10),
-      monthlyTrend
+      monthlyTrend,
+      availableMonths,
+      selectedMonth: filterMonth || 'ALL'
     };
   }
 }

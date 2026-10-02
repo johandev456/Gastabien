@@ -77,7 +77,10 @@ export interface AnalyticsSummary {
   byBank: BankDistribution[];
   recentTransactions: Transaction[];
   monthlyTrend: MonthlyTrend[];
+  availableMonths?: string[];
+  selectedMonth?: string;
 }
+
 
 export interface StatementEntry {
   date: string;

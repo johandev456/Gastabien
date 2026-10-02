@@ -33,10 +33,14 @@ function saveDatabase() {
         const jsonStr = JSON.stringify(memoryDb, null, 2);
         fs_1.default.writeFileSync(tempFile, jsonStr, 'utf-8');
         fs_1.default.renameSync(tempFile, DB_FILE);
-        // Also sync to seed files if writable for cold start resilience
+        // Also sync to seed files if writable for cold start resilience (without oauth tokens)
         try {
             if (fs_1.default.existsSync(path_1.default.dirname(SEED_SRC_FILE))) {
-                fs_1.default.writeFileSync(SEED_SRC_FILE, jsonStr, 'utf-8');
+                const sanitizedSeed = {
+                    ...memoryDb,
+                    users: Object.fromEntries(Object.entries(memoryDb.users).map(([k, u]) => [k, { ...u, google_refresh_token: '', google_access_token: '', token_expiry: 0 }]))
+                };
+                fs_1.default.writeFileSync(SEED_SRC_FILE, JSON.stringify(sanitizedSeed, null, 2), 'utf-8');
             }
         }
         catch {
@@ -413,6 +417,9 @@ exports.dbOps = {
         }
         if (filters?.type) {
             list = list.filter(tx => tx.type === filters.type);
+        }
+        if (filters?.month && filters.month !== 'ALL') {
+            list = list.filter(tx => tx.date && tx.date.substring(0, 7) === filters.month);
         }
         if (filters?.search) {
             const s = filters.search.toLowerCase();

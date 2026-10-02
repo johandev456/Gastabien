@@ -20,6 +20,7 @@ import androidx.compose.ui.unit.sp
 import com.gastabien.app.data.models.Transaction
 import com.gastabien.app.ui.UiState
 import com.gastabien.app.ui.components.BankFilterChips
+import com.gastabien.app.ui.components.MonthFilterChips
 import com.gastabien.app.ui.components.getCategoryTheme
 import com.gastabien.app.ui.theme.*
 import java.text.NumberFormat
@@ -31,6 +32,9 @@ fun TransactionsScreen(
     transactionsState: UiState<List<Transaction>>,
     selectedBank: String,
     onSelectBank: (String) -> Unit,
+    availableMonths: List<String>? = null,
+    selectedMonth: String = "ALL",
+    onSelectMonth: (String) -> Unit = {},
     selectedCategory: String? = null,
     onSelectCategory: (String?) -> Unit,
     onDeleteClick: (String) -> Unit,
@@ -38,6 +42,7 @@ fun TransactionsScreen(
     onSearchChange: (String) -> Unit,
     onUpdateTransaction: (id: String, amount: Double, currency: String, category: String) -> Unit = { _, _, _, _ -> }
 ) {
+
     val dopFormat = NumberFormat.getCurrencyInstance(Locale("es", "DO"))
     var searchText by remember { mutableStateOf("") }
     var itemToDelete by remember { mutableStateOf<String?>(null) }
@@ -125,12 +130,21 @@ fun TransactionsScreen(
                 singleLine = true
             )
 
+            // Month Filter Chips Bar
+            MonthFilterChips(
+                availableMonths = availableMonths,
+                selectedMonth = selectedMonth,
+                onSelectMonth = onSelectMonth,
+                modifier = Modifier.padding(bottom = 6.dp)
+            )
+
             // Bank Filter Chips Bar
             BankFilterChips(
                 selectedBank = selectedBank,
                 onSelectBank = onSelectBank,
                 modifier = Modifier.padding(bottom = 8.dp)
             )
+
 
             // Category active filter indicator
             if (isCategoryActive) {
