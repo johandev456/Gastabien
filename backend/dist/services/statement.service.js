@@ -96,6 +96,21 @@ class StatementService {
         let text = raw.trim();
         // 1. Remove pipe tails e.g. "||" or trailing delimiters
         text = text.replace(/\|+$/g, '').trim();
+        // 1b. Reversals and refunds: clean the merchant inside and label the movement
+        const reversal = text.match(/^REVERSO\s+DE\s+COMPRA\s+(.+)$/i);
+        if (reversal)
+            return `Reverso: ${this.cleanPromericaDescription(reversal[1], undefined, 'EXPENSE')}`;
+        const refund = text.match(/^CV\s*\|\s*(.+)$/i);
+        if (refund)
+            return `Devolución: ${this.cleanPromericaDescription(refund[1], undefined, 'EXPENSE')}`;
+        // 1c. ACH / bank transfers: "TRANSF ACH ... A BANCO X ****1234|cedula|NOMBRE"
+        if (/^transf/i.test(text) && type !== 'INCOME') {
+            const [head, , holder] = text.split('|');
+            const bank = head.match(/\bA\s+(BANCO\s+.+?)\s*\*+(\d{4})/i);
+            const bankLabel = bank ? `${this.titleCase(bank[1].replace(/^BANCO\s+/i, 'Banco '))} (*${bank[2]})` : 'otra cuenta';
+            const name = holder ? this.titleCase(holder.trim()) : '';
+            return name ? `Transferencia a ${bankLabel} - ${name}` : `Transferencia a ${bankLabel}`;
+        }
         // 2. Clean Paydays & Incomes
         if (type === 'INCOME' || txCode === '58-27' || /quincena|n[oó]mina|sueldo|salario|abono|dep[oó]sito/i.test(text)) {
             if (/primera\s+quincena/i.test(text)) {
@@ -159,6 +174,9 @@ class StatementService {
         // 6. Clean POS purchases
         let merchant = text
             .replace(/^COMPRA\s+POS\s+/i, '')
+            .replace(/\s*\+?\d{9,}\b/g, '')
+            .replace(/\s+(?:STOCKHOLM|SINGAPORE)\b/i, '')
+            .replace(/\s+(?:SE|SG|US|DO)$/i, '')
             .replace(/\s*(?:SANTO\s*DOMINGODO|SANTO\s*DOMINGO\s*DO|SANTO\s*DOMINGO|SANTO\s*DOM\s*DO|DR\s*DO|AMZN\.COM\/BILLUS|US)$/i, '')
             .replace(/\s+/g, ' ')
             .trim();
@@ -191,6 +209,16 @@ class StatementService {
         if (/xupitos/i.test(merchant)) {
             return 'Xupitos Bar';
         }
+        if (/^pedidosya/i.test(merchant)) {
+            const shop = merchant.replace(/^pedidosya\s*\*?\s*/i, '').trim();
+            return shop ? `PedidosYa - ${this.titleCase(shop)}` : 'PedidosYa';
+        }
+        if (/^spotify/i.test(merchant))
+            return 'Spotify';
+        if (/^anthropic/i.test(merchant))
+            return 'Anthropic (Claude)';
+        if (/alibaba/i.test(merchant))
+            return 'Alibaba Cloud';
         if (/expendomax/i.test(merchant)) {
             return 'Expendomax (Máquinas Expendedoras)';
         }
@@ -341,7 +369,8 @@ class StatementService {
                     currency: 'DOP',
                     type,
                     reference: ref || undefined,
-                    txCode: txCode || undefined
+                    txCode: txCode || undefined,
+                    rawDescription: rawDesc
                 });
                 continue;
             }
@@ -391,6 +420,24 @@ class StatementService {
                 type
             });
         }
+        // Transfers between the account holder's own accounts are not expenses: the holder's ID is the
+        // one that shows up most often in the pipe-delimited details (fees, phone top-ups, own transfers).
+        const idCounts = new Map();
+        for (const e of entries) {
+            for (const id of new Set((e.rawDescription || '').match(/\b\d{11}\b/g) || [])) {
+                idCounts.set(id, (idCounts.get(id) || 0) + 1);
+            }
+        }
+        const ownerId = Array.from(idCounts.entries()).sort((a, b) => b[1] - a[1])[0]?.[0];
+        if (ownerId) {
+            for (const e of entries) {
+                const parts = (e.rawDescription || '').split('|');
+                if (e.type === 'EXPENSE' && /^transf/i.test(parts[0].trim()) && parts[1]?.trim() === ownerId) {
+                    e.type = 'TRANSFER';
+                    e.description = e.description.replace(/^Transferencia a /, 'Transferencia propia a ').replace(/\s+-\s+.*$/, '');
+                }
+            }
+        }
         // Safety fallback: If statement contained an initial balance / previous saldo in the header but no deposit rows:
         const hasIncome = entries.some(e => e.type === 'INCOME');
         if (!hasIncome) {
@@ -413,11 +460,24 @@ class StatementService {
         return entries;
     }
     /**
-     * Reconciles parsed statement entries against database transactions
+     * Replaces every bank transaction in the statement period with the official statement entries.
+     * The statement is the definitive source: no fuzzy matching decides what survives, so tiny
+     * amount differences or name variations can never leave duplicates behind.
+     * With autoImport=false nothing is written (preview only).
      */
     reconcile(userId, statementText, bankCode = 'PROMERICA', autoImport = true) {
-        const entries = this.parseStatementText(statementText, bankCode);
-        const existingTransactions = db_1.dbOps.getTransactions(userId, { bank: bankCode });
+        const parsed = this.parseStatementText(statementText, bankCode);
+        // Drop exact repeats of the same row (same reference, date, amount and type) from overlapping pastes
+        const seen = new Set();
+        const entries = parsed.filter(e => {
+            if (!e.reference)
+                return true;
+            const key = `${e.reference}|${e.date}|${e.amount.toFixed(2)}|${e.type}`;
+            if (seen.has(key))
+                return false;
+            seen.add(key);
+            return true;
+        });
         const report = {
             totalStatementEntries: entries.length,
             matchedCount: 0,
@@ -428,104 +488,84 @@ class StatementService {
             totalExpenseAmount: 0,
             items: []
         };
-        const usedTxIds = new Set();
-        // Pass: Match or Add Statement Entries (Statement is the Master Ground Truth)
+        if (entries.length === 0)
+            return report;
+        const DAY_MS = 24 * 3600 * 1000;
+        const sortedDates = entries.map(e => e.date).sort();
+        const minDateStr = sortedDates[0];
+        const maxDateStr = sortedDates[sortedDates.length - 1];
+        const startTime = new Date(`${minDateStr}T00:00:00.000Z`).getTime();
+        const endTime = new Date(`${maxDateStr}T23:59:59.999Z`).getTime();
+        const existing = db_1.dbOps.getTransactions(userId, { bank: bankCode });
+        // Everything inside the period is replaced. One day of padding on each side covers timezone
+        // shifts of email timestamps; there only email records that resemble a statement row are removed.
+        const toRemove = new Map();
+        for (const tx of existing) {
+            const t = new Date(tx.date).getTime();
+            if (isNaN(t))
+                continue;
+            if (t >= startTime && t <= endTime) {
+                toRemove.set(tx.id, tx);
+            }
+            else if (!tx.isManual && t >= startTime - DAY_MS && t <= endTime + DAY_MS) {
+                const resembles = entries.some(e => e.type === tx.type &&
+                    Math.abs(e.amount - tx.amount) <= 1 &&
+                    Math.abs(new Date(`${e.date}T12:00:00.000Z`).getTime() - t) <= 2 * DAY_MS);
+                if (resembles)
+                    toRemove.set(tx.id, tx);
+            }
+        }
         for (const entry of entries) {
             if (entry.type === 'INCOME') {
                 report.totalIncomeAmount += entry.amount;
             }
-            else {
+            else if (entry.type === 'EXPENSE') {
                 report.totalExpenseAmount += entry.amount;
             }
-            // Find matching existing transaction (same date +/- 3 days and same amount)
-            const match = existingTransactions.find(tx => {
-                if (usedTxIds.has(tx.id))
-                    return false;
-                const isSameAmount = Math.abs(tx.amount - entry.amount) < 0.05;
-                if (!isSameAmount)
-                    return false;
-                if (tx.type !== entry.type)
-                    return false;
-                const txDate = tx.date.substring(0, 10);
-                const diffDays = Math.abs(new Date(txDate).getTime() - new Date(entry.date).getTime()) / (1000 * 3600 * 24);
-                return diffDays <= 3;
-            });
-            if (match) {
-                usedTxIds.add(match.id);
-                report.matchedCount++;
-                let updated = false;
-                if (match.merchant.startsWith('Transacción') || match.merchant.startsWith('Consumo Tarjeta') || match.merchant !== entry.description) {
-                    const cleanDesc = entry.description.replace(/^Retiro en Cajero \(/, '').replace(/\)$/, '');
-                    const newCategory = categorization_service_1.categorizationService.categorize(cleanDesc, undefined, entry.type);
-                    db_1.dbOps.updateTransaction(userId, match.id, {
-                        merchant: entry.description,
-                        category: newCategory
-                    });
-                    report.updatedCount++;
-                    updated = true;
-                }
-                report.items.push({
-                    entry,
-                    status: updated ? 'UPDATED' : 'MATCHED',
-                    matchedTransactionId: match.id,
-                    details: updated
-                        ? `Nombre y categoría actualizados desde el estado de cuenta oficial.`
-                        : `Verificado: coincide con registro de correo existente.`
+            // Informational only: an old record that resembles this row (loose tolerance)
+            const counterpart = Array.from(toRemove.values()).find(tx => tx.type === entry.type &&
+                Math.abs(tx.amount - entry.amount) <= 1 &&
+                Math.abs(new Date(tx.date).getTime() - new Date(`${entry.date}T12:00:00.000Z`).getTime()) <= 3 * DAY_MS);
+            const status = counterpart ? 'UPDATED' : 'ADDED';
+            if (counterpart)
+                report.updatedCount++;
+            else
+                report.addedCount++;
+            let newId;
+            if (autoImport) {
+                const category = categorization_service_1.categorizationService.categorize(entry.description, undefined, entry.type);
+                const newTx = db_1.dbOps.createTransaction({
+                    userId,
+                    bank: bankCode,
+                    bankName: bankCode === 'PROMERICA' ? 'Banco Promerica' : (bankCode === 'POPULAR' ? 'Banco Popular' : bankCode),
+                    type: entry.type,
+                    amount: entry.amount,
+                    currency: entry.currency,
+                    merchant: entry.description,
+                    date: `${entry.date}T12:00:00.000Z`,
+                    category,
+                    notes: entry.reference ? `Ref: ${entry.reference} (Estado de Cuenta)` : 'Importado desde Estado de Cuenta',
+                    isManual: false
                 });
+                newId = newTx.id;
             }
-            else {
-                if (autoImport) {
-                    const category = categorization_service_1.categorizationService.categorize(entry.description, undefined, entry.type);
-                    const newTx = db_1.dbOps.createTransaction({
-                        userId,
-                        bank: bankCode,
-                        bankName: bankCode === 'PROMERICA' ? 'Banco Promerica' : (bankCode === 'POPULAR' ? 'Banco Popular' : bankCode),
-                        type: entry.type,
-                        amount: entry.amount,
-                        currency: entry.currency,
-                        merchant: entry.description,
-                        date: `${entry.date}T12:00:00.000Z`,
-                        category,
-                        notes: entry.reference ? `Ref: ${entry.reference} (Estado de Cuenta)` : 'Importado desde Estado de Cuenta',
-                        isManual: false
-                    });
-                    report.addedCount++;
-                    report.items.push({
-                        entry,
-                        status: 'ADDED',
-                        matchedTransactionId: newTx.id,
-                        details: entry.type === 'INCOME'
-                            ? `Ingreso oficial detectado e importado al balance.`
-                            : `Gasto oficial detectado e importado al balance.`
-                    });
-                }
-            }
+            report.items.push({
+                entry,
+                status,
+                matchedTransactionId: newId,
+                details: counterpart
+                    ? 'Reemplazó el registro anterior con los datos oficiales del estado de cuenta.'
+                    : (entry.type === 'INCOME' ? 'Ingreso oficial importado.' : 'Gasto oficial importado.')
+            });
         }
-        // Purge unmatched phantom email transactions within the statement date range
-        if (entries.length > 0) {
-            const sortedDates = entries.map(e => e.date).sort();
-            const minDateStr = sortedDates[0];
-            const maxDateStr = sortedDates[sortedDates.length - 1];
-            if (minDateStr && maxDateStr) {
-                db_1.dbOps.saveReconciledPeriod(userId, bankCode, minDateStr, maxDateStr);
-                const startTime = new Date(`${minDateStr}T00:00:00.000Z`).getTime();
-                const endTime = new Date(`${maxDateStr}T23:59:59.999Z`).getTime();
-                for (const tx of existingTransactions) {
-                    if (usedTxIds.has(tx.id))
-                        continue;
-                    if (tx.isManual)
-                        continue; // preserve user-created manual notes
-                    const txTime = new Date(tx.date).getTime();
-                    if (txTime >= startTime && txTime <= endTime) {
-                        // Unmatched email transaction in statement period (ghost or declined authorization)
-                        if (tx.externalId) {
-                            db_1.dbOps.ignoreExternalId(userId, tx.externalId);
-                        }
-                        db_1.dbOps.deleteTransaction(userId, tx.id);
-                        report.removedCount++;
-                    }
-                }
+        report.removedCount = toRemove.size;
+        if (autoImport) {
+            for (const tx of toRemove.values()) {
+                if (tx.externalId)
+                    db_1.dbOps.ignoreExternalId(userId, tx.externalId);
+                db_1.dbOps.deleteTransaction(userId, tx.id);
             }
+            db_1.dbOps.saveReconciledPeriod(userId, bankCode, minDateStr, maxDateStr);
         }
         report.totalIncomeAmount = Math.round(report.totalIncomeAmount * 100) / 100;
         report.totalExpenseAmount = Math.round(report.totalExpenseAmount * 100) / 100;

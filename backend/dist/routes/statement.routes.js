@@ -14,7 +14,7 @@ router.post('/sync', (req, res) => {
         const report = statement_service_1.statementService.reconcile(userId, text, (bank || 'PROMERICA'), autoImport !== false);
         return res.json({
             success: true,
-            message: `¡Conciliación completada! ${report.matchedCount} transacciones verificadas, ${report.addedCount} movimientos nuevos agregados y ${report.updatedCount} actualizados.`,
+            message: `¡Estado de cuenta aplicado! ${report.totalStatementEntries} movimientos oficiales importados (${report.updatedCount} reemplazaron registros previos, ${report.addedCount} son nuevos) y ${report.removedCount} registros anteriores del período fueron reemplazados.`,
             report
         });
     }
