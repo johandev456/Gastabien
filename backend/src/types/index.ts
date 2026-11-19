@@ -93,6 +93,19 @@ export interface AnalyticsSummary {
     color: string;
   }[];
   recentTransactions: Transaction[];
+  /** Top merchants by DOP spend in the filtered period (computed over ALL filtered expenses). */
+  topMerchants?: {
+    merchant: string;
+    total: number;
+    count: number;
+    category: Category;
+    percentage: number;
+    lastDate: string;
+  }[];
+  merchantsCount?: number;
+  expenseCount?: number;
+  averageExpense?: number;
+  largestExpense?: Transaction | null;
   monthlyTrend: {
     month: string;
     expenses: number;

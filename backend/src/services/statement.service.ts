@@ -1,6 +1,8 @@
 import { dbOps } from '../database/db';
 import { BankCode, Category, Transaction, TransactionType } from '../types';
 import { categorizationService } from './categorization.service';
+import { BaseBankParser } from '../parsers/base.parser';
+import { isValidYmd, drDayKey } from '../utils/date';
 
 export interface StatementEntry {
   date: string;
@@ -44,9 +46,7 @@ export class StatementService {
   /**
    * Helper to parse a CSV line accounting for quotes and delimiters (; or , or \t)
    */
-  private parseCSVLine(line: string): string[] {
-    // Detect delimiter: semicolon, tab, or comma
-    const delimiter = line.includes(';') && !line.includes(',') ? ';' : (line.includes('\t') ? '\t' : ',');
+  private parseCSVLine(line: string, delimiter: string = this.detectDelimiter([line])): string[] {
     const result: string[] = [];
     let current = '';
     let inQuotes = false;
@@ -67,11 +67,55 @@ export class StatementService {
   }
 
   /**
+   * Detects the file's delimiter once (counting separators outside quotes on the first lines),
+   * so a description containing a comma never changes how a row is split.
+   */
+  private detectDelimiter(lines: string[]): string {
+    const counts: Record<string, number> = { ';': 0, '\t': 0, ',': 0 };
+    for (const line of lines.slice(0, 15)) {
+      let inQuotes = false;
+      for (const ch of line) {
+        if (ch === '"') inQuotes = !inQuotes;
+        else if (!inQuotes && ch in counts) counts[ch]++;
+      }
+    }
+    if (counts['\t'] > 0 && counts['\t'] >= counts[';'] && counts['\t'] >= counts[',']) return '\t';
+    if (counts[';'] > 0 && counts[';'] >= counts[',']) return ';';
+    return ',';
+  }
+
+  /** Parses a localized money string ("1.234,56", "(2,000.00)", "RD$ 12,500") into a positive number. */
+  private parseMoney(raw: string | undefined): number {
+    if (!raw) return 0;
+    const digits = raw.replace(/[^0-9.,]/g, '');
+    if (!digits) return 0;
+    const normalized = BaseBankParser.normalizeNumber(digits);
+    const value = normalized === null ? NaN : parseFloat(normalized);
+    return isNaN(value) ? 0 : Math.abs(value);
+  }
+
+  /** Builds YYYY-MM-DD only for real calendar dates; returns '' otherwise. */
+  private ymd(y: number, m: number, d: number): string {
+    if (!isValidYmd(y, m, d)) return '';
+    return `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+  }
+
+  /** For dates printed without a year: use the most recent year that doesn't put it in the future. */
+  private inferYear(month: number, day: number): number {
+    const today = drDayKey(new Date());
+    const year = parseInt(today.substring(0, 4), 10);
+    const candidate = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    // Allow a few days of slack for posting dates; anything later belongs to last year
+    const limit = drDayKey(new Date(Date.now() + 7 * 24 * 3600 * 1000));
+    return candidate > limit ? year - 1 : year;
+  }
+
+  /**
    * Universal Date Parser for Dominican statements:
    * Handles: DD/MM/YYYY, DD-MM-YYYY, YYYY-MM-DD, DD-MMM-YYYY, DD/MM/YY
    */
   public parseAnyDate(rawDate: string): string {
-    if (!rawDate) return new Date().toISOString().substring(0, 10);
+    if (!rawDate) return '';
     const clean = rawDate.trim();
 
     // 1. ISO format: YYYY-MM-DD or YYYY/MM/DD
@@ -80,7 +124,7 @@ export class StatementService {
       const y = parseInt(isoMatch[1], 10);
       const m = parseInt(isoMatch[2], 10);
       const d = parseInt(isoMatch[3], 10);
-      return `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+      return this.ymd(y, m, d);
     }
 
     // 2. Month name in Spanish e.g. 25-SEP-2026 or 25/SEPTIEMBRE/2026
@@ -95,10 +139,11 @@ export class StatementService {
     if (nameMonthMatch) {
       const d = parseInt(nameMonthMatch[1], 10);
       const monthKey = normalizeStr(nameMonthMatch[2]).substring(0, 3);
-      const m = spanishMonths[monthKey] || 1;
+      const m = spanishMonths[monthKey] || spanishMonths[normalizeStr(nameMonthMatch[2])];
+      if (!m) return '';
       let y = parseInt(nameMonthMatch[3], 10);
       if (y < 100) y += 2000;
-      return `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+      return this.ymd(y, m, d);
     }
 
     // 3. DD/MM/YYYY or DD-MM-YYYY or DD.MM.YYYY
@@ -106,8 +151,6 @@ export class StatementService {
     if (dmyMatch) {
       const p1 = parseInt(dmyMatch[1], 10);
       const p2 = parseInt(dmyMatch[2], 10);
-      let y = dmyMatch[3] ? parseInt(dmyMatch[3], 10) : new Date().getFullYear();
-      if (y < 100) y += 2000;
 
       let day = p1;
       let month = p2;
@@ -115,10 +158,12 @@ export class StatementService {
         day = p2;
         month = p1;
       }
-      return `${y}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+      let y = dmyMatch[3] ? parseInt(dmyMatch[3], 10) : this.inferYear(month, day);
+      if (y < 100) y += 2000;
+      return this.ymd(y, month, day);
     }
 
-    return new Date().toISOString().substring(0, 10);
+    return '';
   }
 
   /**
@@ -281,6 +326,8 @@ export class StatementService {
   public parseStatementText(text: string, defaultBank: BankCode = 'PROMERICA'): StatementEntry[] {
     const rawLines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
     const entries: StatementEntry[] = [];
+    const delimiter = this.detectDelimiter(rawLines);
+    const fileIsUsd = /moneda\s*:?\s*(?:usd|us\$|d[oó]lar)/i.test(text);
 
     // Header column indices
     let headerColIdx: {
@@ -306,7 +353,7 @@ export class StatementService {
       );
 
       if (isHeaderRow) {
-        const cols = this.parseCSVLine(line);
+        const cols = this.parseCSVLine(line, delimiter);
         headerColIdx = {};
 
         cols.forEach((rawCol, idx) => {
@@ -337,13 +384,14 @@ export class StatementService {
 
       // 2. Parse CSV Row with Header Columns
       if (headerColIdx && headerColIdx.postDate !== undefined) {
-        const cols = this.parseCSVLine(line);
+        const cols = this.parseCSVLine(line, delimiter);
         if (cols.length < 2) continue;
 
         const rawDate = cols[headerColIdx.postDate] || '';
         if (!/\d{1,2}[\/\-\.]\d{1,2}/.test(rawDate)) continue;
 
         const dateStr = this.parseAnyDate(rawDate);
+        if (!dateStr) continue;
         const rawDesc = headerColIdx.desc !== undefined ? cols[headerColIdx.desc] : (cols[1] || '');
         if (/^\s*totales?\s*:?\s*$/i.test(rawDesc) || (cols[0] === '' && /totales?/i.test(rawDesc))) continue;
 
@@ -357,11 +405,9 @@ export class StatementService {
         if (headerColIdx.withdrawals !== undefined || headerColIdx.deposits !== undefined) {
           const wStr = headerColIdx.withdrawals !== undefined ? cols[headerColIdx.withdrawals] : '0';
           const dStr = headerColIdx.deposits !== undefined ? cols[headerColIdx.deposits] : '0';
-          const bStr = headerColIdx.balance !== undefined ? cols[headerColIdx.balance] : '0';
 
-          const wVal = Math.abs(parseFloat(wStr.replace(/[^\d.-]/g, '')) || 0);
-          const dVal = Math.abs(parseFloat(dStr.replace(/[^\d.-]/g, '')) || 0);
-          const bVal = Math.abs(parseFloat(bStr.replace(/[^\d.-]/g, '')) || 0);
+          const wVal = this.parseMoney(wStr);
+          const dVal = this.parseMoney(dStr);
 
           if (dVal > 0) {
             type = 'INCOME';
@@ -369,11 +415,9 @@ export class StatementService {
           } else if (wVal > 0) {
             type = 'EXPENSE';
             amount = wVal;
-          } else if (bVal > 0 && /balance\s*anterior|saldo\s*anterior|saldo\s*inicial|balance\s*inicial|saldo\s*al|balance\s*al|apertura|deposito|abono|nomina|sueldo/i.test(rawDesc)) {
-            type = 'INCOME';
-            amount = bVal;
           } else {
-            continue; // Skip 0 rows
+            // Rows with only a balance (saldo anterior / inicial) are not money movements
+            continue;
           }
         }
         // Case B: Single Amount Column
@@ -381,7 +425,7 @@ export class StatementService {
           const amtStr = cols[headerColIdx.amount] || '0';
           const isNegative = amtStr.includes('-') || /^\(.*\)$/.test(amtStr);
           const isExplicitPositive = amtStr.includes('+');
-          const parsedNum = Math.abs(parseFloat(amtStr.replace(/[^\d.-]/g, '')) || 0);
+          const parsedNum = this.parseMoney(amtStr);
 
           if (parsedNum <= 0) continue;
           amount = parsedNum;
@@ -413,7 +457,7 @@ export class StatementService {
           rawDate,
           description: cleanDesc,
           amount: Math.round(amount * 100) / 100,
-          currency: 'DOP',
+          currency: fileIsUsd || /US\$|\bUSD\b/i.test(line) ? 'USD' : 'DOP',
           type,
           reference: ref || undefined,
           txCode: txCode || undefined,
@@ -428,17 +472,20 @@ export class StatementService {
         continue;
       }
 
-      const dateMatch = line.match(/(\d{1,2}[\/\-\.]\d{1,2}(?:[\/\-\.]\d{2,4})?)/);
+      // A date needs a year, or "/" "-" separators: "12.50" is an amount, not December 50th
+      const dateMatch = line.match(/(?<![\d.,])(\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{2,4}|\d{1,2}[\/\-]\d{1,2})(?![\d.,])/);
       if (!dateMatch) continue;
 
       const dateStr = this.parseAnyDate(dateMatch[1]);
+      if (!dateStr) continue;
 
-      // Extract currency amounts
-      const numbers = Array.from(line.matchAll(/(?:RD\$|USD|US\$|\$)?\s*([0-9]{1,3}(?:,[0-9]{3})*(?:\.[0-9]{2})|[0-9]+(?:\.[0-9]{2}))/g));
+      // Extract currency amounts (after removing the date so its digits are not read as money)
+      const lineWithoutDate = line.replace(dateMatch[0], ' ');
+      const numbers = Array.from(lineWithoutDate.matchAll(/(?:RD\$|USD|US\$|\$)?\s*([0-9]{1,3}(?:[.,][0-9]{3})+(?:[.,][0-9]{2})?|[0-9]+[.,][0-9]{2})(?![0-9])/g));
       if (numbers.length === 0) continue;
 
       const validNumbers = numbers
-        .map(n => parseFloat(n[1].replace(/,/g, '')))
+        .map(n => this.parseMoney(n[1]))
         .filter(n => !isNaN(n) && n > 0);
 
       if (validNumbers.length === 0) continue;
@@ -449,7 +496,7 @@ export class StatementService {
       // Clean description
       let desc = line
         .replace(dateMatch[0], '')
-        .replace(/(?:[\+\-])?\s*(?:RD\$|USD|US\$|\$)?\s*[0-9]{1,3}(?:,[0-9]{3})*(?:\.[0-9]{2})/g, '')
+        .replace(/(?:[\+\-])?\s*(?:RD\$|USD|US\$|\$)?\s*(?:[0-9]{1,3}(?:[.,][0-9]{3})+(?:[.,][0-9]{2})?|[0-9]+[.,][0-9]{2})(?![0-9])/g, '')
         .replace(/[,\t|;]+/g, ' ')
         .replace(/[\+\-:]+$/g, '')
         .replace(/^[\+\-:]+/g, '')
@@ -499,25 +546,8 @@ export class StatementService {
       }
     }
 
-    // Safety fallback: If statement contained an initial balance / previous saldo in the header but no deposit rows:
-    const hasIncome = entries.some(e => e.type === 'INCOME');
-    if (!hasIncome) {
-      const initialMatch = text.match(/(?:saldo\s*inicial|balance\s*inicial|saldo\s*anterior|balance\s*anterior|total\s*(?:cr[eé]ditos|dep[oó]sitos|abonos))\s*:?,?\s*(?:RD\$|\$)?\s*([0-9]{1,3}(?:,[0-9]{3})*(?:\.[0-9]{2})|[0-9]+(?:\.[0-9]{2}))/i);
-      if (initialMatch) {
-        const amt = parseFloat(initialMatch[1].replace(/,/g, ''));
-        if (amt > 0) {
-          const earliestDate = entries.length > 0 ? entries[entries.length - 1].date : new Date().toISOString().substring(0, 10);
-          entries.unshift({
-            date: earliestDate,
-            rawDate: earliestDate,
-            description: 'Saldo Inicial / Balance Anterior',
-            amount: Math.round(amt * 100) / 100,
-            currency: 'DOP',
-            type: 'INCOME'
-          });
-        }
-      }
-    }
+    // Note: opening balances (saldo inicial / anterior) are intentionally NOT imported as income:
+    // they are not money movements and would inflate the period's income.
 
     return entries;
   }

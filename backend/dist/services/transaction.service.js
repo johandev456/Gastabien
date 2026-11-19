@@ -5,6 +5,7 @@ exports.getAmountInDop = getAmountInDop;
 exports.enrichTransaction = enrichTransaction;
 const db_1 = require("../database/db");
 const config_1 = require("../config");
+const date_1 = require("../utils/date");
 function getAmountInDop(amount, currency = 'DOP') {
     if (currency === 'USD') {
         return Math.round(amount * config_1.CONFIG.USD_TO_DOP_RATE * 100) / 100;
@@ -22,13 +23,21 @@ function enrichTransaction(tx) {
 class TransactionService {
     getAnalyticsSummary(userId, filterBanks, filterMonth) {
         const allRawTransactions = db_1.dbOps.getTransactions(userId).map(enrichTransaction);
-        // Extract all distinct available months from historical transactions
+        const bankFiltered = filterBanks && filterBanks.length > 0
+            ? allRawTransactions.filter(tx => filterBanks.includes(tx.bank))
+            : allRawTransactions;
+        // Distinct available months (all banks, so the month selector stays stable) and the
+        // monthly trend (respecting the bank filter). Months are bucketed in DR local time.
         const availableMonthsSet = new Set();
-        const monthlyMap = {};
         for (const tx of allRawTransactions) {
-            if (tx.date && tx.date.length >= 7) {
-                const monthKey = tx.date.substring(0, 7); // YYYY-MM
-                availableMonthsSet.add(monthKey);
+            const key = (0, date_1.drMonthKey)(tx.date);
+            if (key.length === 7)
+                availableMonthsSet.add(key);
+        }
+        const monthlyMap = {};
+        for (const tx of bankFiltered) {
+            const monthKey = (0, date_1.drMonthKey)(tx.date);
+            if (monthKey.length === 7) {
                 if (!monthlyMap[monthKey]) {
                     monthlyMap[monthKey] = { expenses: 0, income: 0 };
                 }
@@ -42,18 +51,17 @@ class TransactionService {
             }
         }
         const availableMonths = Array.from(availableMonthsSet).sort((a, b) => b.localeCompare(a));
-        // Filter transactions by bank
-        let transactions = allRawTransactions;
-        if (filterBanks && filterBanks.length > 0) {
-            transactions = transactions.filter(tx => filterBanks.includes(tx.bank));
-        }
-        // Filter transactions by selected month if active
+        // Filter transactions by bank, then by selected month if active
+        let transactions = bankFiltered;
         if (filterMonth && filterMonth !== 'ALL') {
-            transactions = transactions.filter(tx => tx.date && tx.date.substring(0, 7) === filterMonth);
+            transactions = transactions.filter(tx => tx.date && (0, date_1.drMonthKey)(tx.date) === filterMonth);
         }
         let totalExpenses = 0;
         let totalIncome = 0;
         const categoryTotals = {};
+        const merchantTotals = {};
+        let largestExpense = null;
+        let expenseCount = 0;
         const bankTotals = {
             POPULAR: { expenses: 0, income: 0, count: 0 },
             BHD: { expenses: 0, income: 0, count: 0 },
@@ -65,6 +73,18 @@ class TransactionService {
             const dopAmount = tx.amountInDop ?? getAmountInDop(tx.amount, tx.currency);
             if (tx.type === 'EXPENSE') {
                 totalExpenses += dopAmount;
+                expenseCount++;
+                if (!largestExpense || dopAmount > (largestExpense.amountInDop ?? 0)) {
+                    largestExpense = tx;
+                }
+                const merchantKey = (tx.merchant || 'Sin comercio').trim().toLowerCase();
+                if (!merchantTotals[merchantKey]) {
+                    merchantTotals[merchantKey] = { merchant: tx.merchant || 'Sin comercio', total: 0, count: 0, category: tx.category, lastDate: tx.date };
+                }
+                merchantTotals[merchantKey].total += dopAmount;
+                merchantTotals[merchantKey].count += 1;
+                if (tx.date > merchantTotals[merchantKey].lastDate)
+                    merchantTotals[merchantKey].lastDate = tx.date;
                 // Categories
                 if (!categoryTotals[tx.category]) {
                     categoryTotals[tx.category] = { total: 0, count: 0 };
@@ -99,19 +119,33 @@ class TransactionService {
                 icon: config_1.CATEGORY_ICONS[cat] || 'tag'
             };
         }).sort((a, b) => b.total - a.total);
-        // Bank summary
-        const byBank = Object.keys(config_1.SUPPORTED_BANKS).map(code => {
+        // Bank summary (supported banks always listed; MANUAL only when it has movements)
+        const bankCodes = [...Object.keys(config_1.SUPPORTED_BANKS), 'MANUAL'];
+        const byBank = bankCodes
+            .filter(code => code !== 'MANUAL' || bankTotals.MANUAL.count > 0)
+            .map(code => {
             const config = config_1.SUPPORTED_BANKS[code];
             const stats = bankTotals[code] || { expenses: 0, income: 0, count: 0 };
             return {
                 bank: code,
-                bankName: config.name,
+                bankName: config ? config.name : 'Manual / Efectivo',
                 totalExpenses: Math.round(stats.expenses * 100) / 100,
                 totalIncome: Math.round(stats.income * 100) / 100,
                 count: stats.count,
-                color: config.color
+                color: config ? config.color : '#64748B'
             };
         });
+        const topMerchants = Object.values(merchantTotals)
+            .sort((a, b) => b.total - a.total)
+            .slice(0, 10)
+            .map(m => ({
+            merchant: m.merchant,
+            total: Math.round(m.total * 100) / 100,
+            count: m.count,
+            category: m.category,
+            percentage: totalExpenses > 0 ? Math.round((m.total / totalExpenses) * 1000) / 10 : 0,
+            lastDate: m.lastDate
+        }));
         // Monthly trends (last 6 distinct months)
         const monthlyTrend = Object.entries(monthlyMap)
             .sort((a, b) => a[0].localeCompare(b[0]))
@@ -131,6 +165,11 @@ class TransactionService {
             categories,
             byBank,
             recentTransactions: transactions.slice(0, 10),
+            topMerchants,
+            merchantsCount: Object.keys(merchantTotals).length,
+            expenseCount,
+            averageExpense: expenseCount > 0 ? Math.round((totalExpenses / expenseCount) * 100) / 100 : 0,
+            largestExpense,
             monthlyTrend,
             availableMonths,
             selectedMonth: filterMonth || 'ALL'

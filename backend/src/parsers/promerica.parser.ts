@@ -1,5 +1,6 @@
 import { BaseBankParser } from './base.parser';
 import { BankCode, ParsedTransaction, RawEmailData, TransactionType } from '../types';
+import { drDayOfMonth } from '../utils/date';
 
 export class PromericaParser extends BaseBankParser {
   bankCode: BankCode = 'PROMERICA';
@@ -24,9 +25,14 @@ export class PromericaParser extends BaseBankParser {
 
     // Determine type
     let type: TransactionType = 'EXPENSE';
-    const isIncome = (
-      /dep[oó]sito|cr[eé]dito|transferencia recibida|abono|n[oó]mina|sueldo|salario|pago recibido/i.test(subject) ||
-      /n[oó]mina|sueldo|salario|dep[oó]sito|deposito|cr[eé]dito\s*en\s*cuenta|acreditad[oa]|ha sido acreditado|abono de|abono a|transferencia recibida|dep[oó]sito recibido/i.test(fullText)
+    const typeSubject = this.stripCardProductNames(subject);
+    const typeText = this.stripCardProductNames(fullText);
+    const isPurchase = /consumo|compra|cargo|d[eé]bito/i.test(typeSubject) ||
+      /\b(?:consumo|compra|cargo)\s+(?:por|en|de)\b/i.test(typeText);
+    // Body keywords must describe money coming IN (a bare "depósito" can appear in disclaimers)
+    const isIncome = !isPurchase && (
+      /dep[oó]sito|cr[eé]dito|transferencia recibida|abono|n[oó]mina|sueldo|salario|pago recibido/i.test(typeSubject) ||
+      /n[oó]mina|sueldo|salario|cr[eé]dito\s*en\s*cuenta|ha sido acreditad[oa]|acreditad[oa]\s+(?:a|en)\s+su|abono de|abono a|transferencia recibida|dep[oó]sito recibido|dep[oó]sito\s+(?:a|en)\s+su\s+cuenta/i.test(typeText)
     );
 
     const isWithdrawal = (
@@ -58,16 +64,10 @@ export class PromericaParser extends BaseBankParser {
 
     // 2. Fallback: look for currency symbol with amount (e.g. RD$ 146.44 or US$ 15.99)
     if (amount <= 0) {
-      const currencyMatches = fullText.match(/(?:RD\$|US\$|USD|DOP)\s*([0-9]{1,3}(?:,[0-9]{3})*(?:\.[0-9]{2})?|[0-9]+(?:\.[0-9]{2})?)/gi);
-      if (currencyMatches) {
-        for (const matchStr of currencyMatches) {
-          const parsed = this.parseAmountAndCurrency(matchStr);
-          if (parsed && parsed.amount > 0) {
-            amount = parsed.amount;
-            currency = parsed.currency;
-            break;
-          }
-        }
+      const found = this.findCurrencyAmount(fullText);
+      if (found) {
+        amount = found.amount;
+        currency = found.currency;
       }
     }
 
@@ -76,7 +76,7 @@ export class PromericaParser extends BaseBankParser {
     // Extract Date
     const date = this.parseDate(fullText, email.date);
     const parsedDateObj = new Date(date);
-    const dayOfMonth = parsedDateObj.getDate();
+    const dayOfMonth = drDayOfMonth(parsedDateObj);
 
     // Extract Merchant / Description
     let merchant = '';
@@ -106,7 +106,11 @@ export class PromericaParser extends BaseBankParser {
         merchant = 'Depósito / Transferencia Recibida';
       }
     }
-    // C. Standard Merchant Extraction for Purchases
+    // C. Bank service fees (e.g. SMS notification charge)
+    else if (/notificaci[oó]n(?:es)?\s*(?:por\s*)?sms|cargo\s+por\s+servicio\s+de\s+notificaci[oó]n/i.test(fullText)) {
+      merchant = 'Cargo por Notificación SMS';
+    }
+    // D. Standard Merchant Extraction for Purchases
     else {
       const lineMatches = fullText.match(/(?:comercio|establecimiento|lugar|negocio|proveedor|afiliado)\s*:\s*([^\n\r<]{3,80})/i);
       if (lineMatches && lineMatches[1]) {
@@ -122,6 +126,10 @@ export class PromericaParser extends BaseBankParser {
 
       // If no valid merchant or transaction context was found, do NOT create a phantom transaction
       if (!merchant || merchant.length < 2) {
+      merchant = this.extractMerchantAfterAmount(fullText);
+    }
+
+    if (!merchant || merchant.length < 2) {
         return null;
       }
     }

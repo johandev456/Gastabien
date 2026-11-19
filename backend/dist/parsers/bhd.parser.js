@@ -19,7 +19,9 @@ class BhdParser extends base_parser_1.BaseBankParser {
         const subject = email.subject || '';
         // Transaction Type
         let type = 'EXPENSE';
-        if (/crédito|credito|depósito|deposito|transferencia recibida|abono/i.test(subject) || /se ha acreditado|depósito en su cuenta/i.test(fullText)) {
+        const typeSubject = this.stripCardProductNames(subject);
+        const isPurchase = /consumo|compra|d[eé]bito|cargo|pago de servicio/i.test(typeSubject);
+        if (!isPurchase && (/crédito|credito|depósito|deposito|transferencia recibida|abono/i.test(typeSubject) || /se ha acreditado|depósito en su cuenta/i.test(fullText))) {
             type = 'INCOME';
         }
         else if (/pago de tarjeta|transferencia entre/i.test(subject)) {
@@ -39,16 +41,10 @@ class BhdParser extends base_parser_1.BaseBankParser {
         }
         // 2. Currency with amount
         if (amount <= 0) {
-            const currencyMatches = fullText.match(/(?:RD\$|US\$|USD|DOP)\s*([0-9]{1,3}(?:,[0-9]{3})*(?:\.[0-9]{2})?|[0-9]+(?:\.[0-9]{2})?)/gi);
-            if (currencyMatches) {
-                for (const matchStr of currencyMatches) {
-                    const parsed = this.parseAmountAndCurrency(matchStr);
-                    if (parsed && parsed.amount > 0) {
-                        amount = parsed.amount;
-                        currency = parsed.currency;
-                        break;
-                    }
-                }
+            const found = this.findCurrencyAmount(fullText);
+            if (found) {
+                amount = found.amount;
+                currency = found.currency;
             }
         }
         if (amount <= 0)
@@ -64,6 +60,9 @@ class BhdParser extends base_parser_1.BaseBankParser {
             if (inlineMatch && inlineMatch[1]) {
                 merchant = this.cleanMerchantName(inlineMatch[1]);
             }
+        }
+        if (!merchant || merchant.length < 2) {
+            merchant = this.extractMerchantAfterAmount(fullText);
         }
         if (!merchant || merchant.length < 2) {
             if (type === 'INCOME') {

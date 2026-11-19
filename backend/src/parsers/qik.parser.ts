@@ -1,5 +1,6 @@
 import { BaseBankParser } from './base.parser';
 import { BankCode, ParsedTransaction, RawEmailData, TransactionType } from '../types';
+import { drDayOfMonth } from '../utils/date';
 
 export class QikParser extends BaseBankParser {
   bankCode: BankCode = 'QIK';
@@ -46,16 +47,10 @@ export class QikParser extends BaseBankParser {
 
     // 2. Currency with amount
     if (amount <= 0) {
-      const currencyMatches = fullText.match(/(?:RD\$|US\$|USD|DOP)\s*([0-9]{1,3}(?:,[0-9]{3})*(?:\.[0-9]{2})?|[0-9]+(?:\.[0-9]{2})?)/gi);
-      if (currencyMatches) {
-        for (const matchStr of currencyMatches) {
-          const parsed = this.parseAmountAndCurrency(matchStr);
-          if (parsed && parsed.amount > 0) {
-            amount = parsed.amount;
-            currency = parsed.currency;
-            break;
-          }
-        }
+      const found = this.findCurrencyAmount(fullText);
+      if (found) {
+        amount = found.amount;
+        currency = found.currency;
       }
     }
 
@@ -76,7 +71,7 @@ export class QikParser extends BaseBankParser {
     }
 
     if (!merchant) {
-      const inlineMatch = fullText.match(/(?:compra en|pago en|transferencia a|consumo en|en el comercio|en)\s+([^,\n\r<]{3,60}?)(?:\s+por|\s+con|\s+el|\s+en\s+fecha|\.|\,|$)/i);
+      const inlineMatch = fullText.match(/(?:compra en|pago en|transferencia a|consumo en|en el comercio|[0-9]\s+en)\s+([^,\n\r<]{3,60}?)(?:\s+por|\s+con|\s+el|\s+en\s+fecha|\.|\,|$)/i);
       if (inlineMatch && inlineMatch[1]) {
         const candidate = this.cleanMerchantName(inlineMatch[1]);
         if (candidate.toLowerCase() !== 'qik' && candidate.toLowerCase() !== 'tu cuenta') {

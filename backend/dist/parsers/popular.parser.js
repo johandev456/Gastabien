@@ -2,6 +2,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.PopularParser = void 0;
 const base_parser_1 = require("./base.parser");
+const date_1 = require("../utils/date");
 class PopularParser extends base_parser_1.BaseBankParser {
     bankCode = 'POPULAR';
     bankName = 'Banco Popular Dominicano';
@@ -9,19 +10,25 @@ class PopularParser extends base_parser_1.BaseBankParser {
         const from = (email.from || '').toLowerCase();
         const subject = (email.subject || '').toLowerCase();
         const body = (email.bodySnippet || '').toLowerCase();
+        // Generic "Aviso de ..." subjects are shared by several banks: only trust them
+        // when the sender is not another supported bank.
+        const fromOtherBank = /bhd\.com\.do|bhdleon\.com\.do|promerica\.com\.do|qik\.com\.do/.test(from);
         return (from.includes('bpd.com.do') ||
             from.includes('popularenlinea') ||
             subject.includes('banco popular') ||
             body.includes('banco popular dominicano') ||
-            (subject.includes('aviso de débito') || subject.includes('aviso de debito') || subject.includes('aviso de compra') || subject.includes('aviso de retiro')));
+            (!fromOtherBank && (subject.includes('aviso de débito') || subject.includes('aviso de debito') || subject.includes('aviso de compra') || subject.includes('aviso de retiro'))));
     }
     parse(email) {
         const fullText = this.cleanText((email.bodyHtml || '') + '\n' + (email.bodyText || '') + '\n' + (email.bodySnippet || ''));
         const subject = email.subject || '';
-        // Determine Transaction Type
+        const typeSubject = this.stripCardProductNames(subject);
+        const typeText = this.stripCardProductNames(fullText);
+        // Determine Transaction Type (purchases/consumptions always win over generic "crédito")
         let type = 'EXPENSE';
-        const isIncome = (/dep[oó]sito|cr[eé]dito|transferencia recibida|abono a cuenta|n[oó]mina|nomina|sueldo|salario/i.test(subject) ||
-            /dep[oó]sito recibido|cr[eé]dito aplicado|abono de n[oó]mina|sueldo acreditado/i.test(fullText));
+        const isPurchase = /consumo|compra|d[eé]bito por|cargo/i.test(typeSubject);
+        const isIncome = !isPurchase && (/dep[oó]sito|cr[eé]dito|transferencia recibida|abono a cuenta|n[oó]mina|nomina|sueldo|salario/i.test(typeSubject) ||
+            /dep[oó]sito recibido|cr[eé]dito aplicado|abono de n[oó]mina|sueldo acreditado|cr[eé]dito por n[oó]mina/i.test(typeText));
         const isWithdrawal = (/retiro\s*en\s*cajero|retiro\s*de\s*efectivo|cajero\s*autom[aá]tico|retiro\s*atm/i.test(subject) ||
             /retiro\s*en\s*cajero|retiro\s*de\s*efectivo|cajero\s*autom[aá]tico|cajero\s*automatico|retiro\s*atm/i.test(fullText));
         if (isIncome) {
@@ -44,16 +51,10 @@ class PopularParser extends base_parser_1.BaseBankParser {
         }
         // 2. Fallback: Currency marker with amount
         if (amount <= 0) {
-            const currencyMatches = fullText.match(/(?:RD\$|US\$|USD|DOP)\s*([0-9]{1,3}(?:,[0-9]{3})*(?:\.[0-9]{2})?|[0-9]+(?:\.[0-9]{2})?)/gi);
-            if (currencyMatches) {
-                for (const matchStr of currencyMatches) {
-                    const parsed = this.parseAmountAndCurrency(matchStr);
-                    if (parsed && parsed.amount > 0) {
-                        amount = parsed.amount;
-                        currency = parsed.currency;
-                        break;
-                    }
-                }
+            const found = this.findCurrencyAmount(fullText);
+            if (found) {
+                amount = found.amount;
+                currency = found.currency;
             }
         }
         if (amount <= 0)
@@ -61,7 +62,7 @@ class PopularParser extends base_parser_1.BaseBankParser {
         // Extract Date
         const date = this.parseDate(fullText, email.date);
         const parsedDateObj = new Date(date);
-        const dayOfMonth = parsedDateObj.getDate();
+        const dayOfMonth = (0, date_1.drDayOfMonth)(parsedDateObj);
         // Extract Merchant / Description
         let merchant = '';
         if (isWithdrawal) {
@@ -96,6 +97,9 @@ class PopularParser extends base_parser_1.BaseBankParser {
                 if (inlineMatch && inlineMatch[1]) {
                     merchant = this.cleanMerchantName(inlineMatch[1]);
                 }
+            }
+            if (!merchant || merchant.length < 2) {
+                merchant = this.extractMerchantAfterAmount(fullText);
             }
             if (!merchant || merchant.length < 2) {
                 return null;
