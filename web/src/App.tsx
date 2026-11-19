@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Navbar } from './components/Navbar';
 import { SummaryCards } from './components/SummaryCards';
 import { CategoryPieChart } from './components/CategoryPieChart';
@@ -11,210 +11,286 @@ import { BankFilterBar } from './components/BankFilterBar';
 import { MonthFilterBar } from './components/MonthFilterBar';
 import { TwoFactorLockScreen } from './components/TwoFactorLockScreen';
 import { ApiClient } from './api/client';
-import { AnalyticsSummary, Transaction, Category } from './types';
+import { AnalyticsSummary, Transaction, Category, BankCode, AuthStatus, CreateTransactionInput, SyncResult } from './types';
+import { DEFAULT_USD_RATE } from './utils/format';
+
+const SUMMARY_CACHE_KEY = 'gastabien_cached_summary';
+const TX_CACHE_KEY = 'gastabien_cached_transactions';
+/** Refresh data when the tab becomes visible again after this long. */
+const STALE_AFTER_MS = 60_000;
+
+function readCache<T>(key: string, fallback: T): T {
+  try {
+    const cached = localStorage.getItem(key);
+    return cached ? (JSON.parse(cached) as T) : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function writeCache(key: string, value: unknown) {
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+  } catch {
+    // storage full or unavailable: caching is best-effort
+  }
+}
+
+type Toast = { type: 'success' | 'error'; message: string };
 
 export function App() {
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => ApiClient.hasSessionToken());
-  const [authChecking, setAuthChecking] = useState(() => !ApiClient.hasSessionToken());
+  // A stored token is NOT trusted until the server confirms it (avoids flashing protected data)
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [authChecking, setAuthChecking] = useState(true);
   const [requires2FASetup, setRequires2FASetup] = useState(false);
 
-  const [summary, setSummary] = useState<AnalyticsSummary | null>(() => {
-    try {
-      const cached = localStorage.getItem('gastabien_cached_summary');
-      return cached ? JSON.parse(cached) : null;
-    } catch {
-      return null;
-    }
-  });
+  // Cache holds the UNFILTERED view only (filters reset to "all" on reload)
+  const [summary, setSummary] = useState<AnalyticsSummary | null>(() => readCache(SUMMARY_CACHE_KEY, null));
+  const [transactions, setTransactions] = useState<Transaction[]>(() => readCache(TX_CACHE_KEY, []));
 
-  const [transactions, setTransactions] = useState<Transaction[]>(() => {
-    try {
-      const cached = localStorage.getItem('gastabien_cached_transactions');
-      return cached ? JSON.parse(cached) : [];
-    } catch {
-      return [];
-    }
-  });
-
-  const [selectedBanks, setSelectedBanks] = useState<string[]>([]);
+  const [selectedBanks, setSelectedBanks] = useState<BankCode[]>([]);
   const [selectedMonth, setSelectedMonth] = useState<string>('ALL');
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [addModalType, setAddModalType] = useState<'EXPENSE' | 'INCOME'>('EXPENSE');
   const [isBanksModalOpen, setIsBanksModalOpen] = useState(false);
   const [isStatementModalOpen, setIsStatementModalOpen] = useState(false);
-  const [notification, setNotification] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
-  const [isGmailConnected, setIsGmailConnected] = useState(false);
+  const [notification, setNotification] = useState<Toast | null>(null);
+  const [authStatus, setAuthStatus] = useState<AuthStatus | null>(null);
 
-  const showToast = (type: 'success' | 'error', message: string) => {
+  const toastTimer = useRef<number | null>(null);
+  const requestSeq = useRef(0);
+  const lastLoadedAt = useRef(0);
+  const filtersRef = useRef({ banks: selectedBanks, month: selectedMonth });
+  filtersRef.current = { banks: selectedBanks, month: selectedMonth };
+
+  const isGmailConnected = !!authStatus?.user?.hasGmailConnected;
+  const needsReconnect = !!authStatus?.user?.needsReconnect;
+  const lastSyncAt = authStatus?.user?.lastSyncAt || null;
+  const usdRate = summary?.usdToDopRate || DEFAULT_USD_RATE;
+
+  const showToast = useCallback((type: Toast['type'], message: string) => {
+    if (toastTimer.current) window.clearTimeout(toastTimer.current);
     setNotification({ type, message });
-    setTimeout(() => {
-      setNotification(null);
-    }, 4500);
-  };
+    toastTimer.current = window.setTimeout(() => setNotification(null), type === 'error' ? 6500 : 4500);
+  }, []);
 
-  const checkAuth = async () => {
+  useEffect(() => () => {
+    if (toastTimer.current) window.clearTimeout(toastTimer.current);
+  }, []);
+
+  const lockApp = useCallback(() => {
+    ApiClient.clearLocalData();
+    setIsAuthenticated(false);
+    setSummary(null);
+    setTransactions([]);
+    setAuthStatus(null);
+  }, []);
+
+  const checkAuth = useCallback(async () => {
     try {
       const status = await ApiClient.get2FAStatus();
       if (!status.is2FAEnabled || status.requiresSetup) {
+        ApiClient.clearLocalData();
         setRequires2FASetup(true);
         setIsAuthenticated(false);
       } else if (status.isAuthenticated) {
         setIsAuthenticated(true);
         setRequires2FASetup(false);
       } else {
-        setIsAuthenticated(false);
+        // Token missing, expired or revoked: wipe it and the cached financial data
+        lockApp();
         setRequires2FASetup(false);
       }
-    } catch (err: any) {
+    } catch (err) {
       console.warn('Backend waking up or network unavailable during 2FA check:', err);
-      // If client already has a saved session token on this device, keep active while server wakes up
-      if (ApiClient.hasSessionToken()) {
-        setIsAuthenticated(true);
-      } else {
-        setIsAuthenticated(false);
-      }
+      // Offline / cold start: allow a device that already holds a session to see its cached data
+      setIsAuthenticated(ApiClient.hasSessionToken());
     } finally {
       setAuthChecking(false);
     }
-  };
+  }, [lockApp]);
 
   useEffect(() => {
     checkAuth();
-
     const handle2FARequired = () => {
-      setIsAuthenticated(false);
-      ApiClient.clearSessionToken();
+      lockApp();
+      ApiClient.get2FAStatus()
+        .then(s => setRequires2FASetup(!s.is2FAEnabled || s.requiresSetup))
+        .catch(() => {});
     };
-
     window.addEventListener('gastabien:2fa_required', handle2FARequired);
-    return () => {
-      window.removeEventListener('gastabien:2fa_required', handle2FARequired);
-    };
+    return () => window.removeEventListener('gastabien:2fa_required', handle2FARequired);
+  }, [checkAuth, lockApp]);
+
+  const refreshAuthStatus = useCallback(async () => {
+    try {
+      setAuthStatus(await ApiClient.getAuthStatus());
+    } catch {
+      // keep the previous status
+    }
   }, []);
 
-  const loadData = async (banksToFilter = selectedBanks, monthToFilter = selectedMonth) => {
-    if (!ApiClient.hasSessionToken() && !isAuthenticated) {
-      return;
-    }
-    try {
-      setLoading(true);
-      const bankParam = banksToFilter.length === 1 && banksToFilter[0] !== 'ALL' ? (banksToFilter[0] as any) : undefined;
-      const monthParam = monthToFilter !== 'ALL' ? monthToFilter : undefined;
+  /**
+   * Loads summary + transactions for the given filters. Responses from older requests are
+   * ignored, so quickly switching filters can never show data for the wrong bank/month.
+   */
+  const loadData = useCallback(async (banks: BankCode[] = filtersRef.current.banks, month: string = filtersRef.current.month) => {
+    const seq = ++requestSeq.current;
+    setLoading(true);
+    const monthParam = month !== 'ALL' ? month : undefined;
+    const bankParam = banks.length === 1 ? banks[0] : undefined;
+    const isUnfiltered = banks.length === 0 && month === 'ALL';
 
-      const [sumRes, txRes, authRes] = await Promise.allSettled([
-        ApiClient.getSummary(banksToFilter, monthParam),
-        ApiClient.getTransactions({ bank: bankParam, month: monthParam }),
-        ApiClient.getAuthStatus()
-      ]);
+    const [sumRes, txRes] = await Promise.allSettled([
+      ApiClient.getSummary(banks, monthParam),
+      ApiClient.getTransactions({ bank: bankParam, month: monthParam })
+    ]);
+    if (seq !== requestSeq.current) return; // a newer request superseded this one
 
-      if (sumRes.status === 'fulfilled') {
-        setSummary(sumRes.value);
-        try {
-          localStorage.setItem('gastabien_cached_summary', JSON.stringify(sumRes.value));
-        } catch {}
-      }
-      if (txRes.status === 'fulfilled') {
-        let list = txRes.value.transactions;
-        if (banksToFilter.length > 0 && !banksToFilter.includes('ALL')) {
-          list = list.filter(tx => banksToFilter.includes(tx.bank));
-        }
-        if (monthToFilter && monthToFilter !== 'ALL') {
-          list = list.filter(tx => tx.date && tx.date.substring(0, 7) === monthToFilter);
-        }
-        setTransactions(list);
-        if ((banksToFilter.length === 0 || banksToFilter.includes('ALL')) && monthToFilter === 'ALL') {
-          try {
-            localStorage.setItem('gastabien_cached_transactions', JSON.stringify(list));
-          } catch {}
-        }
-      }
-      if (authRes.status === 'fulfilled') {
-        setIsGmailConnected(authRes.value.user?.hasGmailConnected || false);
-      }
-    } catch (err) {
-      console.error('Error fetching data:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    if (isAuthenticated) {
-      loadData(selectedBanks, selectedMonth);
-    }
-
-
-    // Check for auth callback in URL
-    const urlParams = new URLSearchParams(window.location.search);
-    if (urlParams.get('auth_success')) {
-      showToast('success', '¡Cuenta de Gmail vinculada exitosamente! Escaneando correos bancarios...');
-      setIsGmailConnected(true);
-      window.history.replaceState({}, document.title, window.location.pathname);
-      ApiClient.triggerResyncGmail()
-        .then(res => {
-          showToast('success', `¡Escaneo completado! ${res.newTransactionsCount} movimientos registrados.`);
-          if (isAuthenticated) loadData(selectedBanks);
-        })
-        .catch(err => {
-          console.error(err);
-          if (isAuthenticated) loadData(selectedBanks);
-        });
-    } else if (urlParams.get('auth_error')) {
-      showToast('error', `Error al vincular Gmail: ${urlParams.get('auth_error')}`);
-      window.history.replaceState({}, document.title, window.location.pathname);
-    }
-  }, [selectedBanks, selectedMonth, isAuthenticated]);
-
-  const handleToggleBank = (bankCode: string) => {
-    let nextBanks: string[];
-    if (selectedBanks.includes(bankCode)) {
-      nextBanks = selectedBanks.filter(b => b !== bankCode);
+    const failures: string[] = [];
+    if (sumRes.status === 'fulfilled') {
+      setSummary(sumRes.value);
+      if (isUnfiltered) writeCache(SUMMARY_CACHE_KEY, sumRes.value);
     } else {
-      nextBanks = [bankCode];
+      failures.push(sumRes.reason?.message || 'resumen');
     }
-    setSelectedBanks(nextBanks);
+    if (txRes.status === 'fulfilled') {
+      let list = txRes.value.transactions;
+      if (banks.length > 1) list = list.filter(tx => banks.includes(tx.bank));
+      setTransactions(list);
+      if (isUnfiltered) writeCache(TX_CACHE_KEY, list);
+    } else {
+      failures.push(txRes.reason?.message || 'movimientos');
+    }
+
+    setLoadError(failures.length > 0 ? failures[0] : null);
+    if (failures.length === 0) lastLoadedAt.current = Date.now();
+    setLoading(false);
+  }, []);
+
+  // Reload whenever filters change (and right after authenticating)
+  useEffect(() => {
+    if (isAuthenticated) loadData(selectedBanks, selectedMonth);
+  }, [isAuthenticated, selectedBanks, selectedMonth, loadData]);
+
+  // Gmail/auth status: once per authentication, not on every filter change
+  useEffect(() => {
+    if (isAuthenticated) refreshAuthStatus();
+  }, [isAuthenticated, refreshAuthStatus]);
+
+  // Refresh when the user comes back to the tab (other devices/syncs may have changed data)
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    const onVisible = () => {
+      if (document.visibilityState === 'visible' && Date.now() - lastLoadedAt.current > STALE_AFTER_MS) {
+        loadData();
+        refreshAuthStatus();
+      }
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    window.addEventListener('online', onVisible);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisible);
+      window.removeEventListener('online', onVisible);
+    };
+  }, [isAuthenticated, loadData, refreshAuthStatus]);
+
+  // Drop a category filter that no longer exists in the current period
+  useEffect(() => {
+    if (selectedCategory && summary && !summary.categories.some(c => c.category === selectedCategory)) {
+      setSelectedCategory(null);
+    }
+  }, [summary, selectedCategory]);
+
+  const reportSync = useCallback((res: SyncResult, isResync = false) => {
+    if (res.status === 'SUCCESS') {
+      showToast(
+        'success',
+        res.newTransactionsCount > 0
+          ? `¡Gmail escaneado! Se revisaron ${res.emailsProcessed} correos y se agregaron ${res.newTransactionsCount} movimientos${isResync && res.removedCount ? ` (se reemplazaron ${res.removedCount} anteriores)` : ''}.`
+          : `¡Todo al día! Se revisaron ${res.emailsProcessed} correos y no hay movimientos nuevos.`
+      );
+    } else {
+      showToast('error', res.error || 'Error al sincronizar con Gmail');
+    }
+  }, [showToast]);
+
+  // Gmail OAuth callback (?auth_success / ?auth_error): runs once after authentication
+  const oauthHandled = useRef(false);
+  useEffect(() => {
+    if (!isAuthenticated || oauthHandled.current) return;
+    const urlParams = new URLSearchParams(window.location.search);
+    if (!urlParams.has('auth_success') && !urlParams.has('auth_error')) return;
+    oauthHandled.current = true;
+    window.history.replaceState({}, document.title, window.location.pathname);
+
+    if (urlParams.get('auth_success')) {
+      showToast('success', '¡Cuenta de Gmail vinculada! Escaneando todos tus correos bancarios...');
+      setIsSyncing(true);
+      ApiClient.triggerResyncGmail()
+        .then(res => reportSync(res, true))
+        .catch(err => showToast('error', err?.message || 'Error al escanear Gmail'))
+        .finally(() => {
+          setIsSyncing(false);
+          loadData();
+          refreshAuthStatus();
+        });
+    } else {
+      showToast('error', `Error al vincular Gmail: ${urlParams.get('auth_error')}`);
+    }
+  }, [isAuthenticated, showToast, reportSync, loadData, refreshAuthStatus]);
+
+  const handleToggleBank = (bankCode: BankCode) => {
+    setSelectedBanks(prev => (prev.includes(bankCode) ? prev.filter(b => b !== bankCode) : [bankCode]));
   };
 
-  const handleSelectAllBanks = () => {
-    setSelectedBanks([]);
-  };
+  const handleSelectAllBanks = () => setSelectedBanks([]);
 
   const handleSync = async () => {
+    if (!isGmailConnected) {
+      showToast('error', needsReconnect
+        ? 'Google revocó el acceso a Gmail. Vuelve a conectarlo en "Configurar Bancos".'
+        : 'Gmail no está vinculado aún. Conéctalo en "Configurar Bancos" o sube tu estado de cuenta.');
+      setIsBanksModalOpen(true);
+      return;
+    }
     setIsSyncing(true);
     try {
-      if (isGmailConnected) {
-        const res = await ApiClient.triggerSyncGmail();
-        if (res.status === 'SUCCESS') {
-          showToast(
-            'success',
-            res.newTransactionsCount > 0
-              ? `¡Gmail escaneado con éxito! Se revisaron ${res.emailsProcessed} correos y se agregaron ${res.newTransactionsCount} movimientos nuevos.`
-              : '¡Todo al día! No hay transacciones nuevas (todos los movimientos coinciden con el estado de cuenta).'
-          );
-        } else {
-          showToast('error', (res as any).error || 'Error al sincronizar con Gmail');
-        }
-      } else {
-        showToast('error', 'Gmail no está vinculado aún. Conecta Gmail en "Configurar Bancos" o sube tu Estado de Cuenta.');
-      }
-      await loadData(selectedBanks, selectedMonth);
-    } catch {
-      showToast('error', 'Error al sincronizar con el servidor.');
+      reportSync(await ApiClient.triggerSyncGmail());
+    } catch (err: any) {
+      showToast('error', err?.message || 'Error al sincronizar con el servidor.');
     } finally {
       setIsSyncing(false);
+      await Promise.all([loadData(), refreshAuthStatus()]);
     }
   };
 
-  const handleCreateTransaction = async (data: any) => {
+  const handleResync = async () => {
+    if (!window.confirm('¿Re-escanear todo el buzón? Se volverán a importar los movimientos que vienen de correos. Tus registros manuales y estados de cuenta se conservan.')) return;
+    setIsSyncing(true);
+    try {
+      reportSync(await ApiClient.triggerResyncGmail(), true);
+    } catch (err: any) {
+      showToast('error', err?.message || 'Error al re-sincronizar con Gmail.');
+    } finally {
+      setIsSyncing(false);
+      await Promise.all([loadData(), refreshAuthStatus()]);
+    }
+  };
+
+  const handleCreateTransaction = async (data: CreateTransactionInput): Promise<boolean> => {
     try {
       await ApiClient.createTransaction(data);
       showToast('success', 'Movimiento registrado correctamente.');
-      await loadData(selectedBanks, selectedMonth);
-    } catch {
-      showToast('error', 'Error al crear la transacción');
+      await loadData();
+      return true;
+    } catch (err: any) {
+      showToast('error', err?.message || 'Error al crear la transacción');
+      return false;
     }
   };
 
@@ -222,9 +298,9 @@ export function App() {
     try {
       await ApiClient.updateTransaction(id, { category: newCategory });
       showToast('success', 'Categoría actualizada');
-      await loadData(selectedBanks, selectedMonth);
-    } catch {
-      showToast('error', 'Error al actualizar categoría');
+      await loadData();
+    } catch (err: any) {
+      showToast('error', err?.message || 'Error al actualizar categoría');
     }
   };
 
@@ -232,9 +308,9 @@ export function App() {
     try {
       await ApiClient.updateTransaction(id, updates);
       showToast('success', 'Movimiento actualizado correctamente.');
-      await loadData(selectedBanks, selectedMonth);
-    } catch {
-      showToast('error', 'Error al actualizar el movimiento');
+      await loadData();
+    } catch (err: any) {
+      showToast('error', err?.message || 'Error al actualizar el movimiento');
     }
   };
 
@@ -242,10 +318,12 @@ export function App() {
     if (!window.confirm('¿Seguro que deseas eliminar este movimiento?')) return;
     try {
       await ApiClient.deleteTransaction(id);
+      // Optimistic removal keeps the list stable until the refresh arrives
+      setTransactions(prev => prev.filter(t => t.id !== id));
       showToast('success', 'Movimiento eliminado');
-      await loadData(selectedBanks, selectedMonth);
-    } catch {
-      showToast('error', 'Error al eliminar movimiento');
+      await loadData();
+    } catch (err: any) {
+      showToast('error', err?.message || 'Error al eliminar movimiento');
     }
   };
 
@@ -256,10 +334,9 @@ export function App() {
     try {
       await ApiClient.clearAllTransactions();
       showToast('success', 'Todas las transacciones han sido eliminadas correctamente.');
-      await loadData(selectedBanks, selectedMonth);
-    } catch {
-
-      showToast('error', 'Error al borrar las transacciones.');
+      await loadData();
+    } catch (err: any) {
+      showToast('error', err?.message || 'Error al borrar las transacciones.');
     }
   };
 
@@ -269,8 +346,7 @@ export function App() {
     } catch (e) {
       console.error('Logout error:', e);
     }
-    setIsAuthenticated(false);
-    showToast('success', 'Sesión 2FA cerrada correctamente.');
+    lockApp();
   };
 
   // 1. Splash Screen while checking initial 2FA authentication
@@ -299,7 +375,6 @@ export function App() {
         onAuthenticated={() => {
           setIsAuthenticated(true);
           setRequires2FASetup(false);
-          loadData(selectedBanks);
         }}
       />
     );
@@ -315,20 +390,30 @@ export function App() {
       </div>
 
       {/* Toast Notification */}
+      <div className="fixed top-4 sm:top-6 left-4 right-4 sm:left-auto sm:right-6 z-[60] sm:max-w-md pointer-events-none" role="status" aria-live="polite">
       {notification && (
-        <div className="fixed top-6 right-6 z-50 animate-bounce-in max-w-md">
+        <div className="animate-bounce-in pointer-events-auto">
           <div className={`p-4 rounded-2xl border shadow-xl flex items-center gap-3 backdrop-blur-xl ${
             notification.type === 'success'
               ? 'bg-secondary/15 text-secondary border-secondary/30'
               : 'bg-error-container/40 text-error border-error/30'
           }`}>
-            <span className="material-symbols-outlined text-[20px]">
+            <span className="material-symbols-outlined text-[20px] shrink-0" aria-hidden="true">
               {notification.type === 'success' ? 'check_circle' : 'warning'}
             </span>
-            <p className="text-[13px] font-medium leading-relaxed">{notification.message}</p>
+            <p className="text-[13px] font-medium leading-relaxed grow">{notification.message}</p>
+            <button
+              type="button"
+              onClick={() => setNotification(null)}
+              className="shrink-0 opacity-70 hover:opacity-100 cursor-pointer"
+              aria-label="Cerrar notificación"
+            >
+              <span className="material-symbols-outlined text-[18px]" aria-hidden="true">close</span>
+            </button>
           </div>
         </div>
       )}
+      </div>
 
       {/* Top Navbar */}
       <Navbar
@@ -341,11 +426,31 @@ export function App() {
         onOpenBanksModal={() => setIsBanksModalOpen(true)}
         onOpenStatementModal={() => setIsStatementModalOpen(true)}
         isGmailConnected={isGmailConnected}
+        needsReconnect={needsReconnect}
+        lastSyncAt={lastSyncAt}
         onLogout={handleLogout}
       />
 
       {/* Main Dashboard Container */}
-      <main className="relative z-10 w-full max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 py-6 flex flex-col gap-6">
+      <main className="relative z-10 w-full max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 py-6 flex flex-col gap-6 min-w-0">
+        {loadError && (
+          <div role="alert" className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-2xl bg-error-container/20 border border-error/30 text-error">
+            <div className="flex items-start gap-3 min-w-0">
+              <span className="material-symbols-outlined text-[20px] shrink-0" aria-hidden="true">cloud_off</span>
+              <p className="text-[13px] font-medium">
+                No se pudieron actualizar los datos: {loadError}. {summary ? 'Se muestran los últimos datos disponibles.' : ''}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => loadData()}
+              className="self-start sm:self-auto px-4 py-2 rounded-full bg-error/15 hover:bg-error/25 border border-error/40 text-[13px] font-semibold cursor-pointer whitespace-nowrap"
+            >
+              Reintentar
+            </button>
+          </div>
+        )}
+
         {/* BANNER HERO: AUTOMATIZACIÓN BANCARIA RD (Liquid Glass & Specular Gloss) */}
         <div className="relative overflow-hidden rounded-2xl bg-surface-container-low/60 backdrop-blur-2xl p-6 sm:p-8 shadow-[0_24px_48px_-12px_rgba(0,0,0,0.6)] border border-outline-variant/20">
           {/* Specular horizon beam */}
@@ -360,15 +465,15 @@ export function App() {
               </div>
               <div className="flex flex-col gap-1">
                 <div className="flex items-center gap-2 flex-wrap">
-                  <span className="font-headline-lg text-xl sm:text-2xl text-on-surface tracking-tight font-bold">
+                  <h1 className="font-headline-lg text-xl sm:text-2xl text-on-surface tracking-tight font-bold">
                     Control de Gastos & Notificaciones Bancarias
-                  </span>
+                  </h1>
                   <span className="px-2.5 py-0.5 rounded-full bg-primary-container/20 text-primary font-label-sm text-[11px] font-semibold uppercase tracking-wider border border-primary/20">
-                    RD Hub v3.4
+                    RD Hub v3.5
                   </span>
                 </div>
                 <p className="font-body-md text-[14px] text-on-surface-variant leading-relaxed">
-                  Procesamiento autónomo y lectura en tiempo real de avisos transaccionales desde Banco Promerica, Popular, BHD y Qik con categorización instantánea.
+                  Lectura automática de avisos bancarios de Promerica, Popular, BHD y Qik con categorización instantánea y conciliación con tu estado de cuenta.
                 </p>
               </div>
             </div>
@@ -395,17 +500,17 @@ export function App() {
                 onClick={handleSync}
                 disabled={isSyncing}
                 type="button"
-                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-gradient-to-r from-secondary-container via-secondary to-primary-container text-on-secondary font-body-sm text-[13px] font-semibold transition-all shadow-[0_10px_24px_-4px_rgba(71,226,102,0.45)] hover:shadow-[0_14px_30px_-4px_rgba(71,226,102,0.65)] hover:scale-[1.02] cursor-pointer"
+                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-gradient-to-r from-secondary-container via-secondary to-primary-container text-on-secondary font-body-sm text-[13px] font-semibold transition-all shadow-[0_10px_24px_-4px_rgba(71,226,102,0.45)] hover:shadow-[0_14px_30px_-4px_rgba(71,226,102,0.65)] cursor-pointer disabled:opacity-70 disabled:cursor-wait"
               >
-                <span className="material-symbols-outlined text-[18px]">mark_email_read</span>
-                <span>{isSyncing ? 'Escaneando...' : 'Escanear Correos'}</span>
+                <span className={`material-symbols-outlined text-[18px] ${isSyncing ? 'animate-spin' : ''}`} aria-hidden="true">{isSyncing ? 'sync' : 'mark_email_read'}</span>
+                <span>{isSyncing ? 'Escaneando…' : 'Escanear Correos'}</span>
               </button>
             </div>
           </div>
         </div>
 
         {/* Unified Filter Controls: Meses & Bancos */}
-        <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
+        <div className="flex flex-col items-stretch gap-3 min-w-0">
           <MonthFilterBar
             availableMonths={summary?.availableMonths}
             selectedMonth={selectedMonth}
@@ -415,6 +520,8 @@ export function App() {
             selectedBanks={selectedBanks}
             onToggleBank={handleToggleBank}
             onSelectAll={handleSelectAllBanks}
+            lastSyncAt={lastSyncAt}
+            availableBanks={summary?.byBank?.filter(b => b.count > 0).map(b => b.bank)}
           />
         </div>
 
@@ -430,6 +537,9 @@ export function App() {
               categories={summary?.categories || []}
               selectedCategory={selectedCategory}
               onSelectCategory={setSelectedCategory}
+              selectedMonth={selectedMonth}
+              totalExpenses={summary?.totalExpenses}
+              loading={loading}
             />
           </div>
 
@@ -444,6 +554,10 @@ export function App() {
               onSelectCategory={setSelectedCategory}
               categories={summary?.categories || []}
               transactions={transactions}
+              selectedMonth={selectedMonth}
+              usdRate={usdRate}
+              loading={loading}
+              topMerchants={summary?.topMerchants}
             />
           </div>
         </div>
@@ -458,6 +572,7 @@ export function App() {
           onDelete={handleDeleteTransaction}
           onClearAll={handleClearAllTransactions}
           loading={loading}
+          usdRate={usdRate}
         />
       </main>
 
@@ -467,19 +582,24 @@ export function App() {
         initialType={addModalType}
         onClose={() => setIsAddModalOpen(false)}
         onSubmit={handleCreateTransaction}
+        usdRate={usdRate}
       />
 
       <BankConnectionModal
         isOpen={isBanksModalOpen}
         onClose={() => setIsBanksModalOpen(false)}
         isGmailConnected={isGmailConnected}
-        onTransactionAdded={() => loadData(selectedBanks)}
+        needsReconnect={needsReconnect}
+        lastSyncAt={lastSyncAt}
+        onTransactionAdded={() => loadData()}
+        onResync={handleResync}
+        isSyncing={isSyncing}
       />
 
       <StatementSyncModal
         isOpen={isStatementModalOpen}
         onClose={() => setIsStatementModalOpen(false)}
-        onSuccess={() => loadData(selectedBanks)}
+        onSuccess={() => loadData()}
       />
     </div>
   );

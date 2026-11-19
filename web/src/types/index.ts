@@ -38,6 +38,7 @@ export interface Transaction {
   confidenceScore?: number;
   notes?: string;
   isManual?: boolean;
+  categoryOverridden?: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -66,6 +67,49 @@ export interface MonthlyTrend {
   income: number;
 }
 
+export interface TopMerchant {
+  merchant: string;
+  total: number;
+  count: number;
+  category: Category;
+  percentage: number;
+  lastDate: string;
+}
+
+export interface AuthStatus {
+  connected: boolean;
+  hasGoogleAuth?: boolean;
+  user: {
+    id: string;
+    email: string;
+    name?: string;
+    lastSyncAt?: string;
+    needsReconnect?: boolean;
+    hasGmailConnected: boolean;
+  } | null;
+}
+
+export interface SyncResult {
+  status: 'SUCCESS' | 'FAILED' | string;
+  emailsProcessed: number;
+  newTransactionsCount: number;
+  removedCount?: number;
+  error?: string;
+}
+
+export interface CreateTransactionInput {
+  merchant: string;
+  amount: number;
+  currency?: 'DOP' | 'USD';
+  category?: Category;
+  bank?: BankCode;
+  bankName?: string;
+  type?: TransactionType;
+  /** YYYY-MM-DD (DR local day) or full ISO string */
+  date?: string;
+  notes?: string;
+}
+
 export interface AnalyticsSummary {
   totalExpenses: number;
   totalIncome: number;
@@ -76,6 +120,11 @@ export interface AnalyticsSummary {
   categories: CategorySummary[];
   byBank: BankDistribution[];
   recentTransactions: Transaction[];
+  topMerchants?: TopMerchant[];
+  merchantsCount?: number;
+  expenseCount?: number;
+  averageExpense?: number;
+  largestExpense?: Transaction | null;
   monthlyTrend: MonthlyTrend[];
   availableMonths?: string[];
   selectedMonth?: string;

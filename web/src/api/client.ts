@@ -1,4 +1,4 @@
-import { AnalyticsSummary, Transaction, BankCode, Category, ReconciliationReport } from '../types';
+import { AnalyticsSummary, Transaction, BankCode, Category, ReconciliationReport, AuthStatus, SyncResult, CreateTransactionInput } from '../types';
 
 const getApiBase = (): string => {
   const envUrl = (import.meta.env.VITE_API_URL || '').trim();
@@ -7,18 +7,35 @@ const getApiBase = (): string => {
     return cleanUrl.endsWith('/api') ? cleanUrl : `${cleanUrl}/api`;
   }
   
-  // Auto-connect to live Render backend if hosted on Vercel or any remote domain
-  if (typeof window !== 'undefined' && !['localhost', '127.0.0.1'].includes(window.location.hostname)) {
-    return 'https://gastabien.onrender.com/api';
+  // Dev server (also when opened from a phone on the LAN) uses the Vite /api proxy
+  if (import.meta.env.DEV) return '/api';
+
+  if (typeof window !== 'undefined') {
+    const host = window.location.hostname;
+    // Served by the backend itself or a local preview: same-origin API
+    if (['localhost', '127.0.0.1'].includes(host) || host.endsWith('onrender.com')) {
+      return '/api';
+    }
   }
-  
-  return '/api';
+
+  // Hosted on Vercel/Netlify: live Render backend
+  return 'https://gastabien.onrender.com/api';
 };
 
 const API_BASE = getApiBase();
 const USER_ID = 'demo-user-id';
 const TOKEN_KEY = 'gastabien_2fa_device_session';
 const DEVICE_ID_KEY = 'gastabien_2fa_device_id';
+const CACHE_KEYS = ['gastabien_cached_summary', 'gastabien_cached_transactions'];
+const REQUEST_TIMEOUT_MS = 30_000;
+
+/** Error carrying the HTTP status and the server's readable message. */
+export class ApiError extends Error {
+  constructor(message: string, public status: number, public code?: string) {
+    super(message);
+    this.name = 'ApiError';
+  }
+}
 
 export interface TwoFactorStatusResponse {
   is2FAEnabled: boolean;
@@ -67,6 +84,18 @@ export class ApiClient {
     }
   }
 
+  /** Removes the token AND cached financial data (logout / revoked session on shared devices). */
+  public static clearLocalData(): void {
+    this.clearSessionToken();
+    if (typeof window !== 'undefined') {
+      try {
+        CACHE_KEYS.forEach(k => localStorage.removeItem(k));
+      } catch {
+        // storage unavailable
+      }
+    }
+  }
+
   public static getDeviceId(): string {
     if (typeof window === 'undefined') return 'browser-device';
     let deviceId = localStorage.getItem(DEVICE_ID_KEY);
@@ -77,35 +106,63 @@ export class ApiClient {
     return deviceId;
   }
 
-  private static async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
+  private static async request<T>(endpoint: string, options: RequestInit & { timeoutMs?: number } = {}): Promise<T> {
     const cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
     const url = `${API_BASE}${cleanEndpoint}`;
     const token = this.getSessionToken();
+    const { timeoutMs = REQUEST_TIMEOUT_MS, signal: externalSignal, ...fetchOptions } = options;
 
     const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
+      // Only send a JSON content type when there is a body (avoids needless CORS preflights)
+      ...(fetchOptions.body ? { 'Content-Type': 'application/json' } : {}),
       'x-user-id': USER_ID,
-      ...(token ? { Authorization: `Bearer ${token}`, 'x-device-token': token } : {}),
-      ...((options.headers as any) || {})
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...((fetchOptions.headers as Record<string, string>) || {})
     };
 
+    // Timeout (Render cold starts can hang) + optional caller abort signal
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(new DOMException('timeout', 'TimeoutError')), timeoutMs);
+    const onExternalAbort = () => controller.abort(externalSignal?.reason);
+    externalSignal?.addEventListener('abort', onExternalAbort);
+
     try {
-      const res = await fetch(url, { ...options, headers });
-      if (!res.ok) {
-        if (res.status === 401) {
-          const errData = await res.json().catch(() => ({}));
-          if (errData.error === '2FA_REQUIRED') {
-            this.clearSessionToken();
-            window.dispatchEvent(new CustomEvent('gastabien:2fa_required'));
-          }
+      const res = await fetch(url, { ...fetchOptions, headers, signal: controller.signal });
+      const raw = await res.text();
+      let body: any = null;
+      if (raw) {
+        try {
+          body = JSON.parse(raw);
+        } catch {
+          body = raw;
         }
-        const errorText = await res.text().catch(() => res.statusText);
-        throw new Error(`Error ${res.status}: ${errorText}`);
       }
-      return await res.json();
-    } catch (err) {
-      console.warn(`API call failed for ${url}:`, err);
+
+      if (!res.ok) {
+        const code = body && typeof body === 'object' ? body.error : undefined;
+        if (res.status === 401 && code === '2FA_REQUIRED') {
+          this.clearLocalData();
+          window.dispatchEvent(new CustomEvent('gastabien:2fa_required'));
+        }
+        const message =
+          (body && typeof body === 'object' && (body.message || (body.error !== '2FA_REQUIRED' ? body.error : undefined))) ||
+          (typeof body === 'string' && body.length < 200 ? body : '') ||
+          `Error ${res.status}${res.statusText ? `: ${res.statusText}` : ''}`;
+        throw new ApiError(message, res.status, code);
+      }
+      return body as T;
+    } catch (err: any) {
+      if (err?.name === 'AbortError' || err?.name === 'TimeoutError') {
+        if (externalSignal?.aborted) throw err;
+        throw new ApiError('El servidor tardó demasiado en responder. Puede estar despertando; inténtalo de nuevo en unos segundos.', 0, 'TIMEOUT');
+      }
+      if (err instanceof TypeError) {
+        throw new ApiError('No se pudo conectar con el servidor. Revisa tu conexión a internet.', 0, 'NETWORK');
+      }
       throw err;
+    } finally {
+      clearTimeout(timer);
+      externalSignal?.removeEventListener('abort', onExternalAbort);
     }
   }
 
@@ -114,9 +171,7 @@ export class ApiClient {
   // ==========================================
 
   public static async get2FAStatus(): Promise<TwoFactorStatusResponse> {
-    const token = this.getSessionToken();
-    const query = token ? `?token=${encodeURIComponent(token)}` : '';
-    return this.request<TwoFactorStatusResponse>(`/auth/2fa/status${query}`);
+    return this.request<TwoFactorStatusResponse>('/auth/2fa/status');
   }
 
   public static async setup2FA(): Promise<TwoFactorSetupResponse> {
@@ -125,14 +180,13 @@ export class ApiClient {
     });
   }
 
-  public static async verify2FA(code: string, isSetup = false, secret?: string): Promise<TwoFactorVerifyResponse> {
+  public static async verify2FA(code: string, isSetup = false): Promise<TwoFactorVerifyResponse> {
     const deviceId = this.getDeviceId();
     const res = await this.request<TwoFactorVerifyResponse>('/auth/2fa/verify', {
       method: 'POST',
       body: JSON.stringify({
         code,
         isSetup,
-        secret,
         deviceId
       })
     });
@@ -143,11 +197,14 @@ export class ApiClient {
     return res;
   }
 
-  public static async reset2FA(): Promise<{ success: boolean; message: string }> {
-    this.clearSessionToken();
-    return this.request<{ success: boolean; message: string }>('/auth/2fa/reset', {
-      method: 'POST'
+  /** Requires an authorized session, or a backup code when locked out. */
+  public static async reset2FA(backupCode?: string): Promise<{ success: boolean; message: string }> {
+    const res = await this.request<{ success: boolean; message: string }>('/auth/2fa/reset', {
+      method: 'POST',
+      body: JSON.stringify(backupCode ? { backupCode } : {})
     });
+    this.clearLocalData();
+    return res;
   }
 
   public static async logout2FA(): Promise<{ success: boolean }> {
@@ -158,7 +215,7 @@ export class ApiClient {
         body: JSON.stringify({ token })
       });
     } finally {
-      this.clearSessionToken();
+      this.clearLocalData();
     }
     return { success: true };
   }
@@ -167,7 +224,7 @@ export class ApiClient {
   // CORE FINANCIAL API METHODS
   // ==========================================
 
-  public static async getSummary(banks?: string[], month?: string): Promise<AnalyticsSummary> {
+  public static async getSummary(banks?: string[], month?: string, signal?: AbortSignal): Promise<AnalyticsSummary> {
     const params = new URLSearchParams();
     if (banks && banks.length > 0 && !banks.includes('ALL')) {
       params.append('banks', banks.join(','));
@@ -176,7 +233,7 @@ export class ApiClient {
       params.append('month', month);
     }
     const queryStr = params.toString() ? `?${params.toString()}` : '';
-    return this.request<AnalyticsSummary>(`/analytics/summary${queryStr}`);
+    return this.request<AnalyticsSummary>(`/analytics/summary${queryStr}`, { signal });
   }
 
   public static async getTransactions(filters?: {
@@ -185,7 +242,7 @@ export class ApiClient {
     type?: string;
     search?: string;
     month?: string;
-  }): Promise<{ count: number; transactions: Transaction[] }> {
+  }, signal?: AbortSignal): Promise<{ count: number; transactions: Transaction[] }> {
     const params = new URLSearchParams();
     if (filters?.bank) params.append('bank', filters.bank);
     if (filters?.category) params.append('category', filters.category);
@@ -194,20 +251,11 @@ export class ApiClient {
     if (filters?.month && filters.month !== 'ALL') params.append('month', filters.month);
 
     const queryStr = params.toString() ? `?${params.toString()}` : '';
-    return this.request<{ count: number; transactions: Transaction[] }>(`/transactions${queryStr}`);
+    return this.request<{ count: number; transactions: Transaction[] }>(`/transactions${queryStr}`, { signal });
   }
 
 
-  public static async createTransaction(data: {
-    merchant: string;
-    amount: number;
-    category?: Category;
-    bank?: BankCode;
-    bankName?: string;
-    type?: 'EXPENSE' | 'INCOME';
-    date?: string;
-    notes?: string;
-  }): Promise<Transaction> {
+  public static async createTransaction(data: CreateTransactionInput): Promise<Transaction> {
     return this.request<Transaction>('/transactions', {
       method: 'POST',
       body: JSON.stringify(data)
@@ -227,21 +275,24 @@ export class ApiClient {
     });
   }
 
-  public static async triggerSyncGmail(): Promise<{ status: string; emailsProcessed: number; newTransactionsCount: number }> {
-    return this.request<{ status: string; emailsProcessed: number; newTransactionsCount: number }>('/sync/gmail', {
-      method: 'POST'
+  public static async triggerSyncGmail(): Promise<SyncResult> {
+    return this.request<SyncResult>('/sync/gmail', {
+      method: 'POST',
+      timeoutMs: 120_000
     });
   }
 
-  public static async triggerResyncGmail(): Promise<{ status: string; emailsProcessed: number; newTransactionsCount: number }> {
-    return this.request<{ status: string; emailsProcessed: number; newTransactionsCount: number }>('/sync/gmail/resync', {
-      method: 'POST'
+  /** Re-imports Gmail-sourced transactions only (manual and statement data are kept). */
+  public static async triggerResyncGmail(): Promise<SyncResult> {
+    return this.request<SyncResult>('/sync/resync', {
+      method: 'POST',
+      timeoutMs: 180_000
     });
   }
 
   public static async clearAllData(): Promise<{ success: boolean; message: string }> {
-    return this.request<{ success: boolean; message: string }>('/transactions/clear-all', {
-      method: 'POST'
+    return this.request<{ success: boolean; message: string }>('/transactions', {
+      method: 'DELETE'
     });
   }
 
@@ -249,33 +300,15 @@ export class ApiClient {
     return this.clearAllData();
   }
 
-  public static async parseRawEmail(data: { sender?: string; subject?: string; body: string }): Promise<{ success: boolean; transaction: Transaction }> {
-    return this.request<{ success: boolean; transaction: Transaction }>('/banks/parse-email', {
+  public static async parseRawEmail(data: { sender?: string; subject?: string; body: string }): Promise<{ success: boolean; message?: string; transaction: Transaction }> {
+    return this.request<{ success: boolean; message?: string; transaction: Transaction }>('/sync/parse-raw', {
       method: 'POST',
       body: JSON.stringify(data)
     });
   }
 
-  public static async getAuthStatus(): Promise<{
-    connected: boolean;
-    user: {
-      id: string;
-      email: string;
-      name?: string;
-      lastSyncAt?: string;
-      hasGmailConnected: boolean;
-    } | null;
-  }> {
-    return this.request<{
-      connected: boolean;
-      user: {
-        id: string;
-        email: string;
-        name?: string;
-        lastSyncAt?: string;
-        hasGmailConnected: boolean;
-      } | null;
-    }>('/auth/status');
+  public static async getAuthStatus(): Promise<AuthStatus> {
+    return this.request<AuthStatus>('/auth/status');
   }
 
   public static async getGoogleAuthUrl(): Promise<{ configured: boolean; url: string | null; message?: string }> {
@@ -318,6 +351,7 @@ export class ApiClient {
     }
     return this.request<{ success: boolean; message: string; report?: ReconciliationReport }>('/statement/sync', {
       method: 'POST',
+      timeoutMs: 90_000,
       body: JSON.stringify({ text, bank, autoImport })
     });
   }

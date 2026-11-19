@@ -13,7 +13,6 @@ export function TwoFactorLockScreen({ onAuthenticated, requiresSetup: initialReq
   const [otpDigits, setOtpDigits] = useState<string[]>(['', '', '', '', '', '']);
   const [backupCode, setBackupCode] = useState('');
   const [useBackupCode, setUseBackupCode] = useState(false);
-  const [rememberDevice, setRememberDevice] = useState(true);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [copiedSecret, setCopiedSecret] = useState(false);
@@ -28,29 +27,39 @@ export function TwoFactorLockScreen({ onAuthenticated, requiresSetup: initialReq
     try {
       const data = await ApiClient.setup2FA();
       setSetupData(data);
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      setError('Error al inicializar configuración de 2FA. Reintenta.');
+      setError(err?.message || 'Error al inicializar configuración de 2FA. Reintenta.');
     } finally {
       setLoading(false);
     }
   };
 
+  /**
+   * Re-configuring 2FA from the lock screen requires a valid recovery code
+   * (the server rejects unauthenticated resets).
+   */
   const handleReset2FA = async () => {
-    if (!window.confirm('¿Deseas reiniciar la configuración 2FA y escanear un nuevo código QR con tu aplicación de autenticación?')) {
+    const code = backupCode.trim();
+    if (!code) {
+      setUseBackupCode(true);
+      setError('Para reconfigurar el 2FA introduce uno de tus códigos de recuperación y vuelve a pulsar "Reconfigurar".');
+      return;
+    }
+    if (!window.confirm('¿Reiniciar el 2FA? Se cerrarán todas las sesiones y tendrás que escanear un nuevo código QR.')) {
       return;
     }
     setLoading(true);
     setError(null);
     try {
-      await ApiClient.reset2FA();
-      setIsSetupMode(true);
+      await ApiClient.reset2FA(code);
+      setBackupCode('');
       setUseBackupCode(false);
       setOtpDigits(['', '', '', '', '', '']);
-      await loadSetup();
+      setIsSetupMode(true);
     } catch (err: any) {
       console.error(err);
-      setError('Error al reiniciar 2FA. Reintenta.');
+      setError(err?.message || 'Error al reiniciar 2FA. Reintenta.');
     } finally {
       setLoading(false);
     }
@@ -126,11 +135,7 @@ export function TwoFactorLockScreen({ onAuthenticated, requiresSetup: initialReq
     setError(null);
 
     try {
-      const res = await ApiClient.verify2FA(
-        code,
-        isSetupMode,
-        isSetupMode ? setupData?.secret : undefined
-      );
+      const res = await ApiClient.verify2FA(code, isSetupMode);
 
       if (res.success) {
         onAuthenticated();
@@ -139,14 +144,16 @@ export function TwoFactorLockScreen({ onAuthenticated, requiresSetup: initialReq
       }
     } catch (err: any) {
       console.error('2FA Verification error:', err);
-      setError(err.message || 'Código 2FA incorrecto o expirado. Revisa tu app de autenticación.');
+      setError(err?.message || 'Código 2FA incorrecto o expirado. Revisa tu app de autenticación.');
+      setOtpDigits(['', '', '', '', '', '']);
+      setTimeout(() => inputRefs.current[0]?.focus(), 50);
     } finally {
       setLoading(false);
     }
   };
 
   const copyToClipboard = (text: string, type: 'secret' | 'backup') => {
-    navigator.clipboard.writeText(text);
+    navigator.clipboard?.writeText(text).catch(() => {});
     if (type === 'secret') {
       setCopiedSecret(true);
       setTimeout(() => setCopiedSecret(false), 2500);
@@ -274,11 +281,13 @@ export function TwoFactorLockScreen({ onAuthenticated, requiresSetup: initialReq
                         ref={el => (inputRefs.current[index] = el)}
                         type="text"
                         inputMode="numeric"
+                        autoComplete={index === 0 ? 'one-time-code' : 'off'}
+                        aria-label={`Dígito ${index + 1} de 6`}
                         maxLength={6}
                         value={digit}
                         onChange={e => handleDigitChange(index, e.target.value)}
                         onKeyDown={e => handleKeyDown(index, e)}
-                        className="w-11 h-13 text-center text-xl font-bold bg-[#10131A] border border-white/15 focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/20 text-white rounded-xl transition-all outline-none"
+                        className="w-10 sm:w-11 h-12 text-center text-xl font-bold bg-[#10131A] border border-white/15 focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/20 text-white rounded-xl transition-all outline-none"
                       />
                     ))}
                   </div>
@@ -287,7 +296,7 @@ export function TwoFactorLockScreen({ onAuthenticated, requiresSetup: initialReq
             )}
 
             {error && (
-              <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/20 flex items-center gap-2 text-rose-400 text-xs">
+              <div role="alert" className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/20 flex items-center gap-2 text-rose-400 text-xs">
                 <AlertTriangle className="w-4 h-4 shrink-0" />
                 <span>{error}</span>
               </div>
@@ -327,40 +336,35 @@ export function TwoFactorLockScreen({ onAuthenticated, requiresSetup: initialReq
             {!useBackupCode ? (
               <div className="space-y-4">
                 {/* 6 Digit Input Boxes */}
-                <div className="flex justify-center gap-2.5">
+                <div className="flex justify-center gap-2 sm:gap-2.5">
                   {otpDigits.map((digit, index) => (
                     <input
                       key={index}
                       ref={el => (inputRefs.current[index] = el)}
                       type="text"
                       inputMode="numeric"
+                      autoComplete={index === 0 ? 'one-time-code' : 'off'}
+                      aria-label={`Dígito ${index + 1} de 6`}
                       maxLength={6}
                       value={digit}
                       onChange={e => handleDigitChange(index, e.target.value)}
                       onKeyDown={e => handleKeyDown(index, e)}
-                      className="w-12 h-14 text-center text-2xl font-bold bg-[#10131A] border border-white/15 focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/20 text-white rounded-2xl transition-all outline-none shadow-inner"
+                      className="w-11 sm:w-12 h-14 text-center text-2xl font-bold bg-[#10131A] border border-white/15 focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/20 text-white rounded-2xl transition-all outline-none shadow-inner"
                     />
                   ))}
                 </div>
 
-                {/* Remember this device checkbox */}
-                <label className="flex items-center justify-center gap-2 text-xs text-slate-300 cursor-pointer select-none pt-1">
-                  <input
-                    type="checkbox"
-                    checked={rememberDevice}
-                    onChange={e => setRememberDevice(e.target.checked)}
-                    className="rounded border-white/20 bg-black/40 text-emerald-500 focus:ring-emerald-400 h-4 w-4"
-                  />
-                  <span>Recordar este dispositivo (Guardar sesión)</span>
-                </label>
+                <p className="text-center text-[11px] text-slate-400">Este dispositivo quedará autorizado hasta que cierres sesión.</p>
               </div>
             ) : (
               <div className="space-y-3">
-                <label className="text-xs font-medium text-slate-300 block text-center">
+                <label htmlFor="backup-code" className="text-xs font-medium text-slate-300 block text-center">
                   Código de Recuperación de Emergencia (ej. XXXX-XXXX):
                 </label>
                 <input
+                  id="backup-code"
                   type="text"
+                  autoComplete="off"
                   value={backupCode}
                   onChange={e => setBackupCode(e.target.value.toUpperCase())}
                   placeholder="A1B2-C3D4"
@@ -370,7 +374,7 @@ export function TwoFactorLockScreen({ onAuthenticated, requiresSetup: initialReq
             )}
 
             {error && (
-              <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/20 flex items-center gap-2 text-rose-400 text-xs">
+              <div role="alert" className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/20 flex items-center gap-2 text-rose-400 text-xs">
                 <AlertTriangle className="w-4 h-4 shrink-0" />
                 <span>{error}</span>
               </div>
@@ -411,7 +415,7 @@ export function TwoFactorLockScreen({ onAuthenticated, requiresSetup: initialReq
                   className="text-amber-400/90 hover:text-amber-300 font-medium transition-colors text-[11px] flex items-center gap-1.5 cursor-pointer bg-amber-400/10 hover:bg-amber-400/20 px-3 py-1.5 rounded-lg border border-amber-400/20"
                 >
                   <RefreshCw className="w-3 h-3" />
-                  <span>¿No tienes la app o perdiste el código? Reconfigurar 2FA con QR</span>
+                  <span>¿Perdiste la app? Reconfigurar 2FA con un código de recuperación</span>
                 </button>
               </div>
             </div>
@@ -427,7 +431,10 @@ export function TwoFactorLockScreen({ onAuthenticated, requiresSetup: initialReq
           {isSetupMode && (
             <button
               type="button"
-              onClick={handleReset2FA}
+              onClick={() => {
+                setOtpDigits(['', '', '', '', '', '']);
+                loadSetup();
+              }}
               className="text-slate-400 hover:text-slate-200 flex items-center gap-1 text-[10px] cursor-pointer"
             >
               <RefreshCw className="w-2.5 h-2.5" />

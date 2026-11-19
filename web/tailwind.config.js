@@ -4,7 +4,6 @@ export default {
     "./index.html",
     "./src/**/*.{js,ts,jsx,tsx}",
   ],
-  darkMode: 'class',
   theme: {
     extend: {
       colors: {
@@ -62,11 +61,32 @@ export default {
           qik: '#6C2BD9'
         }
       },
+      // Monotonic scale (sm < DEFAULT < md < lg < xl < 2xl < 3xl): inputs (xl) are
+      // never rounder than cards (2xl), and small badges (DEFAULT) are not pills.
       borderRadius: {
-        DEFAULT: "1rem",
-        lg: "2rem",
-        xl: "3rem",
+        sm: "0.25rem",
+        DEFAULT: "0.375rem",
+        md: "0.625rem",
+        lg: "0.875rem",
+        xl: "1rem",
+        "2xl": "1.25rem",
+        "3xl": "1.75rem",
         full: "9999px"
+      },
+      keyframes: {
+        "fade-in": {
+          from: { opacity: "0", transform: "translateY(4px)" },
+          to: { opacity: "1", transform: "translateY(0)" }
+        },
+        "bounce-in": {
+          "0%": { opacity: "0", transform: "translateY(-12px) scale(0.96)" },
+          "60%": { opacity: "1", transform: "translateY(2px) scale(1.01)" },
+          "100%": { opacity: "1", transform: "translateY(0) scale(1)" }
+        }
+      },
+      animation: {
+        "fade-in": "fade-in 0.25s ease-out both",
+        "bounce-in": "bounce-in 0.35s ease-out both"
       },
       spacing: {
         "margin": "2.5rem",
