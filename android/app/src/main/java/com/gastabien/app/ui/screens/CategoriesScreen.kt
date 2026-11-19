@@ -23,6 +23,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.gastabien.app.data.models.AnalyticsSummary
+import com.gastabien.app.data.models.Transaction
+import com.gastabien.app.ui.components.MonthFilterChips
 import com.gastabien.app.ui.UiState
 import com.gastabien.app.ui.components.*
 import com.gastabien.app.ui.theme.*
@@ -43,9 +45,12 @@ fun CategoriesScreen(
     selectedBank: String,
     onSelectBank: (String) -> Unit,
     selectedCategory: String? = null,
-    onSelectCategory: (String?) -> Unit
+    onSelectCategory: (String?) -> Unit,
+    selectedMonth: String = "ALL",
+    onSelectMonth: (String) -> Unit = {},
+    transactions: List<Transaction>? = null
 ) {
-    val dopFormat = NumberFormat.getCurrencyInstance(Locale("es", "DO"))
+    val dopFormat = remember { NumberFormat.getCurrencyInstance(Locale.forLanguageTag("es-DO")) }
     var viewMode by remember { mutableStateOf(AnalyticsViewMode.DONUT) }
 
     Scaffold(
@@ -103,7 +108,7 @@ fun CategoriesScreen(
                 val isCategoryActive = !selectedCategory.isNullOrBlank() && selectedCategory != "ALL"
 
                 val categoryTransactions = if (isCategoryActive) {
-                    summary.recentTransactions
+                    (transactions ?: summary.recentTransactions)
                         .filter { it.category.equals(selectedCategory, ignoreCase = true) && it.type == "EXPENSE" }
                         .sortedByDescending { it.amountInDop ?: (if (it.currency.equals("USD", ignoreCase = true)) it.amount * (it.exchangeRate ?: 60.0) else it.amount) }
                 } else {
@@ -122,6 +127,14 @@ fun CategoriesScreen(
                             .padding(horizontal = 16.dp, vertical = 4.dp),
                         verticalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
+                        // Month Filter Bar (this screen is filtered by month too, so show it)
+                        MonthFilterChips(
+                            availableMonths = summary.availableMonths,
+                            selectedMonth = selectedMonth,
+                            onSelectMonth = onSelectMonth,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+
                         // Bank Filter Bar
                         BankFilterChips(
                             selectedBank = selectedBank,
@@ -139,7 +152,7 @@ fun CategoriesScreen(
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            AnalyticsViewMode.values().forEach { mode ->
+                            AnalyticsViewMode.entries.forEach { mode ->
                                 val isSelected = viewMode == mode
 
                                 Surface(
@@ -310,7 +323,7 @@ fun CategoriesScreen(
                                                             color = OnSurface
                                                         )
                                                         Text(
-                                                            text = "${cat.percentage}%",
+                                                            text = com.gastabien.app.ui.components.formatPercent(cat.percentage),
                                                             fontSize = 11.sp,
                                                             fontWeight = FontWeight.Bold,
                                                             color = theme.color
@@ -329,7 +342,7 @@ fun CategoriesScreen(
                                                 ) {
                                                     Box(
                                                         modifier = Modifier
-                                                            .fillMaxWidth((cat.percentage / 100f).toFloat().coerceIn(0.05f, 1f))
+                                                            .fillMaxWidth((cat.percentage / 100f).toFloat().coerceIn(0f, 1f))
                                                             .fillMaxHeight()
                                                             .clip(CircleShape)
                                                             .background(
@@ -348,7 +361,8 @@ fun CategoriesScreen(
                             AnalyticsViewMode.MERCHANTS -> {
                                 item {
                                     MerchantLeaderboardView(
-                                        transactions = summary.recentTransactions,
+                                        // Every movement of the current filter (recentTransactions holds only 10)
+                                        transactions = transactions ?: summary.recentTransactions,
                                         totalExpenses = summary.totalExpenses,
                                         dopFormat = dopFormat,
                                         onSelectCategory = onSelectCategory

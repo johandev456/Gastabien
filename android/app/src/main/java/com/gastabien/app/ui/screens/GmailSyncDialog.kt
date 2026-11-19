@@ -118,7 +118,7 @@ fun GmailSyncDialog(
                         .horizontalScroll(tabScrollState),
                     horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    SyncDialogTab.values().forEach { tab ->
+                    SyncDialogTab.entries.forEach { tab ->
                         val isTabSelected = selectedTab == tab
                         Surface(
                             shape = RoundedCornerShape(10.dp),
@@ -215,7 +215,7 @@ fun GmailSyncDialog(
                                     )
                                     if (!authStatus?.user?.lastSyncAt.isNullOrBlank()) {
                                         Text(
-                                            text = "Última sincronización: ${authStatus?.user?.lastSyncAt}",
+                                            text = "Última sincronización: ${com.gastabien.app.ui.components.formatRelativeTime(authStatus?.user?.lastSyncAt)}",
                                             fontSize = 10.sp,
                                             color = OnSurfaceVariant
                                         )
@@ -298,7 +298,7 @@ fun GmailSyncDialog(
                                     ),
                                     shape = RoundedCornerShape(12.dp),
                                     modifier = Modifier
-                                        .menuAnchor()
+                                        .menuAnchor(MenuAnchorType.PrimaryNotEditable)
                                         .fillMaxWidth()
                                 )
                                 ExposedDropdownMenu(

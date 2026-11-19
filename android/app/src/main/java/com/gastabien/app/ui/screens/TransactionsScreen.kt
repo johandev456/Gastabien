@@ -22,6 +22,14 @@ import com.gastabien.app.ui.UiState
 import com.gastabien.app.ui.components.BankFilterChips
 import com.gastabien.app.ui.components.MonthFilterChips
 import com.gastabien.app.ui.components.getCategoryTheme
+import com.gastabien.app.ui.components.amountToInput
+import com.gastabien.app.ui.components.formatMoney
+import com.gastabien.app.ui.components.parseAmountInput
+import com.gastabien.app.ui.components.typeVisual
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.automirrored.filled.ReceiptLong
+import androidx.compose.ui.text.style.TextOverflow
 import com.gastabien.app.ui.theme.*
 import java.text.NumberFormat
 import java.util.Locale
@@ -39,12 +47,16 @@ fun TransactionsScreen(
     onSelectCategory: (String?) -> Unit,
     onDeleteClick: (String) -> Unit,
     onCategoryChange: (String, String) -> Unit,
+    searchQuery: String = "",
     onSearchChange: (String) -> Unit,
-    onUpdateTransaction: (id: String, amount: Double, currency: String, category: String) -> Unit = { _, _, _, _ -> }
+    onUpdateTransaction: (id: String, amount: Double, currency: String, category: String, type: String) -> Unit = { _, _, _, _, _ -> },
+    usdRate: Double = 60.0,
+    onRetry: () -> Unit = {}
 ) {
 
-    val dopFormat = NumberFormat.getCurrencyInstance(Locale("es", "DO"))
-    var searchText by remember { mutableStateOf("") }
+    val dopFormat = remember { NumberFormat.getCurrencyInstance(Locale.forLanguageTag("es-DO")) }
+    // The query is owned by the ViewModel so it is not lost when switching tabs
+    val searchText = searchQuery
     var itemToDelete by remember { mutableStateOf<String?>(null) }
     var itemToEdit by remember { mutableStateOf<Transaction?>(null) }
     val isCategoryActive = !selectedCategory.isNullOrBlank() && selectedCategory != "ALL"
@@ -82,7 +94,6 @@ fun TransactionsScreen(
             OutlinedTextField(
                 value = searchText,
                 onValueChange = {
-                    searchText = it
                     onSearchChange(it)
                 },
                 placeholder = {
@@ -103,7 +114,6 @@ fun TransactionsScreen(
                 trailingIcon = {
                     if (searchText.isNotEmpty()) {
                         IconButton(onClick = {
-                            searchText = ""
                             onSearchChange("")
                         }) {
                             Icon(
@@ -186,7 +196,13 @@ fun TransactionsScreen(
                 }
                 is UiState.Error -> {
                     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        Text(text = "Error al cargar movimientos", color = ErrorColor)
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text(text = transactionsState.message, color = ErrorColor, fontSize = 13.sp)
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Button(onClick = onRetry, colors = ButtonDefaults.buttonColors(containerColor = Primary)) {
+                                Text("Reintentar", color = OnPrimary, fontWeight = FontWeight.Bold)
+                            }
+                        }
                     }
                 }
                 is UiState.Success -> {
@@ -203,7 +219,7 @@ fun TransactionsScreen(
                         ) {
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                 Icon(
-                                    Icons.Default.ReceiptLong,
+                                    Icons.AutoMirrored.Filled.ReceiptLong,
                                     contentDescription = null,
                                     tint = OnSurfaceVariant,
                                     modifier = Modifier.size(40.dp)
@@ -244,6 +260,7 @@ fun TransactionsScreen(
                                 TransactionDetailCard(
                                     tx = tx,
                                     dopFormat = dopFormat,
+                                    usdRate = usdRate,
                                     onEdit = { itemToEdit = tx },
                                     onDelete = { itemToDelete = tx.id }
                                 )
@@ -262,9 +279,10 @@ fun TransactionsScreen(
         if (itemToEdit != null) {
             EditAmountDialog(
                 tx = itemToEdit!!,
+                usdRate = usdRate,
                 onDismiss = { itemToEdit = null },
-                onSave = { newAmount, newCurrency, newCategory ->
-                    onUpdateTransaction(itemToEdit!!.id, newAmount, newCurrency, newCategory)
+                onSave = { newAmount, newCurrency, newCategory, newType ->
+                    onUpdateTransaction(itemToEdit!!.id, newAmount, newCurrency, newCategory, newType)
                     itemToEdit = null
                 }
             )
@@ -303,10 +321,12 @@ fun TransactionsScreen(
 fun TransactionDetailCard(
     tx: Transaction,
     dopFormat: NumberFormat,
+    usdRate: Double = 60.0,
     onEdit: () -> Unit,
     onDelete: () -> Unit
 ) {
     val isExpense = tx.type == "EXPENSE"
+    val visual = typeVisual(tx.type)
     val theme = getCategoryTheme(tx.category)
 
     Surface(
@@ -325,13 +345,17 @@ fun TransactionDetailCard(
                 modifier = Modifier
                     .size(42.dp)
                     .clip(RoundedCornerShape(12.dp))
-                    .background(if (isExpense) theme.containerColor else Secondary.copy(alpha = 0.15f)),
+                    .background(if (isExpense) theme.containerColor else visual.color.copy(alpha = 0.15f)),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
-                    if (isExpense) theme.icon else Icons.Default.ArrowUpward,
-                    contentDescription = null,
-                    tint = if (isExpense) theme.color else Secondary,
+                    when (tx.type) {
+                        "EXPENSE" -> theme.icon
+                        "TRANSFER" -> Icons.Default.SwapHoriz
+                        else -> Icons.Default.ArrowDownward
+                    },
+                    contentDescription = visual.label,
+                    tint = if (isExpense) theme.color else visual.color,
                     modifier = Modifier.size(20.dp)
                 )
             }
@@ -353,10 +377,13 @@ fun TransactionDetailCard(
                     horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
                     Text(
-                        text = tx.bankName,
+                        text = tx.bankLabel,
                         fontSize = 11.sp,
                         fontWeight = FontWeight.SemiBold,
-                        color = Primary
+                        color = Primary,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false)
                     )
                     Text(
                         text = "•",
@@ -366,7 +393,10 @@ fun TransactionDetailCard(
                     Text(
                         text = tx.category,
                         fontSize = 11.sp,
-                        color = OnSurfaceVariant
+                        color = OnSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false)
                     )
                 }
                 val formattedDate = com.gastabien.app.ui.components.formatTransactionDate(tx.date)
@@ -401,7 +431,9 @@ fun TransactionDetailCard(
                             Text(
                                 text = tx.accountReference,
                                 fontSize = 10.sp,
-                                color = Secondary
+                                color = Secondary,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
                             )
                         }
                     }
@@ -410,28 +442,20 @@ fun TransactionDetailCard(
 
 
             Column(horizontalAlignment = Alignment.End) {
-                val isUsd = tx.currency.equals("USD", ignoreCase = true)
-                val effectiveDop = tx.amountInDop ?: (if (isUsd) tx.amount * (tx.exchangeRate ?: 60.0) else tx.amount)
-
+                val isUsd = tx.isUsd
+                Text(
+                    text = "${visual.sign}${formatMoney(tx.amount, tx.currencyCode)}",
+                    fontSize = if (isUsd) 13.sp else 14.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = visual.color,
+                    maxLines = 1
+                )
                 if (isUsd) {
                     Text(
-                        text = "${if (isExpense) "-" else "+"} $ ${String.format(Locale.US, "%.2f", tx.amount)} USD",
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = if (isExpense) ErrorColor else Secondary
-                    )
-                    Text(
-                        text = "≈ ${dopFormat.format(effectiveDop)}",
+                        text = "≈ ${formatMoney(tx.amountDop(usdRate))}",
                         fontSize = 10.sp,
                         fontWeight = FontWeight.Medium,
                         color = OnSurfaceVariant
-                    )
-                } else {
-                    Text(
-                        text = "${if (isExpense) "-" else "+"} ${dopFormat.format(tx.amount)}",
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = if (isExpense) ErrorColor else Secondary
                     )
                 }
                 Spacer(modifier = Modifier.height(4.dp))
@@ -471,10 +495,13 @@ fun TransactionDetailCard(
 @Composable
 fun EditAmountDialog(
     tx: Transaction,
+    usdRate: Double = 60.0,
     onDismiss: () -> Unit,
-    onSave: (amount: Double, currency: String, category: String) -> Unit
+    onSave: (amount: Double, currency: String, category: String, type: String) -> Unit
 ) {
-    var amountText by remember { mutableStateOf(tx.amount.toString()) }
+    // Plain decimal text (never "1500.0" or "1.0E7")
+    var amountText by remember { mutableStateOf(amountToInput(tx.amount)) }
+    var selectedType by remember { mutableStateOf(tx.type) }
     var selectedCurrency by remember { mutableStateOf(if (tx.currency.equals("USD", ignoreCase = true)) "USD" else "DOP") }
     var selectedCategory by remember { mutableStateOf(tx.category) }
     var expandedCategoryDropdown by remember { mutableStateOf(false) }
@@ -495,7 +522,7 @@ fun EditAmountDialog(
         "Otros Gastos"
     )
 
-    val parsedAmount = amountText.toDoubleOrNull() ?: 0.0
+    val parsedAmount = parseAmountInput(amountText) ?: 0.0
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -516,9 +543,35 @@ fun EditAmountDialog(
         },
         text = {
             Column(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(14.dp)
             ) {
+                // Movement type
+                Column {
+                    Text("Tipo", fontSize = 12.sp, fontWeight = FontWeight.Medium, color = OnSurfaceVariant)
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        listOf("EXPENSE" to "Gasto", "INCOME" to "Ingreso", "TRANSFER" to "Transf.").forEach { (value, label) ->
+                            FilterChip(
+                                selected = selectedType == value,
+                                onClick = {
+                                    selectedType = value
+                                    if (value == "INCOME") selectedCategory = "Ingresos y Nómina"
+                                    else if (selectedCategory == "Ingresos y Nómina") selectedCategory = "Otros Gastos"
+                                },
+                                label = { Text(label, fontSize = 12.sp) },
+                                colors = FilterChipDefaults.filterChipColors(
+                                    selectedContainerColor = typeVisual(value).color.copy(alpha = 0.22f),
+                                    selectedLabelColor = OnSurface,
+                                    labelColor = OnSurfaceVariant
+                                )
+                            )
+                        }
+                    }
+                }
+
                 // Currency Selector
                 Column {
                     Text("Moneda", fontSize = 12.sp, fontWeight = FontWeight.Medium, color = OnSurfaceVariant)
@@ -563,7 +616,7 @@ fun EditAmountDialog(
                         singleLine = true,
                         prefix = {
                             Text(
-                                if (selectedCurrency == "USD") "$" else "RD$",
+                                if (selectedCurrency == "USD") "US$" else "RD$",
                                 fontWeight = FontWeight.Bold,
                                 color = Primary
                             )
@@ -584,7 +637,7 @@ fun EditAmountDialog(
                     if (selectedCurrency == "USD") {
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
-                            text = "≈ RD$ ${String.format(Locale.US, "%,.2f", parsedAmount * 60.0)} DOP (Tasa ~60.00)",
+                            text = "≈ ${formatMoney(parsedAmount * usdRate)} (tasa ${String.format(Locale.US, "%.2f", usdRate)})",
                             fontSize = 11.sp,
                             color = Secondary,
                             fontWeight = FontWeight.Medium
@@ -606,7 +659,7 @@ fun EditAmountDialog(
                             readOnly = true,
                             trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expandedCategoryDropdown) },
                             modifier = Modifier
-                                .menuAnchor()
+                                .menuAnchor(MenuAnchorType.PrimaryNotEditable)
                                 .fillMaxWidth(),
                             shape = RoundedCornerShape(12.dp),
                             colors = OutlinedTextFieldDefaults.colors(
@@ -640,9 +693,9 @@ fun EditAmountDialog(
         confirmButton = {
             Button(
                 onClick = {
-                    val amount = amountText.toDoubleOrNull()
-                    if (amount != null && amount > 0) {
-                        onSave(amount, selectedCurrency, selectedCategory)
+                    val amount = parseAmountInput(amountText)
+                    if (amount != null) {
+                        onSave(Math.round(amount * 100) / 100.0, selectedCurrency, selectedCategory, selectedType)
                     }
                 },
                 enabled = parsedAmount > 0,

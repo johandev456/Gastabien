@@ -50,7 +50,7 @@ fun MerchantLeaderboardView(
         val sum = txs.sumOf { it.amountInDop ?: (if (it.currency.equals("USD", ignoreCase = true)) it.amount * (it.exchangeRate ?: 60.0) else it.amount) }
         val pct = if (total > 0) (sum / total) * 100.0 else 0.0
         val topCategory = txs.groupBy { it.category }.maxByOrNull { it.value.size }?.key ?: "Otros"
-        val topBank = txs.groupBy { it.bankName }.maxByOrNull { it.value.size }?.key ?: "Banco RD"
+        val topBank = txs.groupBy { it.bankLabel }.maxByOrNull { it.value.size }?.key ?: "Banco RD"
         MerchantAggregated(
             merchant = merchant,
             totalAmount = sum,
@@ -143,7 +143,7 @@ fun MerchantLeaderboardView(
                         ) {
                             Icon(Icons.Default.Insights, contentDescription = null, tint = Secondary, modifier = Modifier.size(14.dp))
                             Text(
-                                text = "Tus 3 principales comercios concentran el %.1f%% del gasto".format(top3Concentration),
+                                text = "Tus 3 principales comercios concentran el ${com.gastabien.app.ui.components.formatPercent(top3Concentration)} del gasto",
                                 fontSize = 11.sp,
                                 color = OnSurfaceVariant
                             )
@@ -258,7 +258,7 @@ fun MerchantLeaderboardView(
                                     color = OnSurface
                                 )
                                 Text(
-                                    text = "%.1f%% • %d movs".format(item.percentageOfTotal, item.count),
+                                    text = "${com.gastabien.app.ui.components.formatPercent(item.percentageOfTotal)} • ${item.count} movs",
                                     fontSize = 10.sp,
                                     fontWeight = FontWeight.SemiBold,
                                     color = theme.color

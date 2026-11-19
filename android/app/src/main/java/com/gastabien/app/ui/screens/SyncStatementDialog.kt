@@ -14,6 +14,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -60,22 +63,31 @@ fun SyncStatementDialog(
     var bank by remember { mutableStateOf("PROMERICA") }
     var fileReadError by remember { mutableStateOf<String?>(null) }
 
+    val scope = rememberCoroutineScope()
     val filePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
     ) { uri: Uri? ->
         if (uri != null) {
-            try {
-                fileReadError = null
-                val fileName = getFileNameFromUri(context, uri)
-                selectedFileName = fileName
-
-                context.contentResolver.openInputStream(uri)?.use { inputStream ->
-                    val reader = BufferedReader(InputStreamReader(inputStream))
-                    val content = reader.readText()
-                    statementText = content
+            fileReadError = null
+            val fileName = getFileNameFromUri(context, uri)
+            // PDFs / Excel files would be read as binary garbage: ask for CSV or pasted text instead
+            if (fileName != null && Regex("\\.(pdf|xlsx?|docx?|png|jpe?g)$", RegexOption.IGNORE_CASE).containsMatchIn(fileName)) {
+                fileReadError = "Formato no soportado. Exporta el estado como CSV o copia y pega la tabla."
+                return@rememberLauncherForActivityResult
+            }
+            selectedFileName = fileName
+            // Read on a background thread (large files would freeze the UI)
+            scope.launch {
+                try {
+                    val content = withContext(Dispatchers.IO) {
+                        context.contentResolver.openInputStream(uri)?.use { inputStream ->
+                            BufferedReader(InputStreamReader(inputStream)).readText()
+                        }
+                    }
+                    if (content != null) statementText = content
+                } catch (e: Exception) {
+                    fileReadError = "Error al leer archivo: ${e.localizedMessage}"
                 }
-            } catch (e: Exception) {
-                fileReadError = "Error al leer archivo: ${e.localizedMessage}"
             }
         }
     }
@@ -144,14 +156,14 @@ fun SyncStatementDialog(
                             }
                             Spacer(modifier = Modifier.height(8.dp))
                             Text(
-                                text = "• Movimientos analizados: ${rep.totalStatementEntries}\n• Verificados: ${rep.matchedCount}\n• Nuevos agregados: ${rep.addedCount}\n• Nombres corregidos: ${rep.updatedCount}\n• Descartados (No en banco): ${rep.removedCount}",
+                                text = "• Movimientos oficiales importados: ${rep.totalStatementEntries}\n• Reemplazaron un registro previo: ${rep.updatedCount}\n• Nuevos (no estaban registrados): ${rep.addedCount}\n• Registros anteriores del período sustituidos: ${rep.removedCount}",
                                 color = OnSurface,
                                 fontSize = 12.sp,
                                 lineHeight = 18.sp
                             )
                             Spacer(modifier = Modifier.height(8.dp))
                             Text(
-                                text = "Ingresos: +RD$ ${"%,.2f".format(rep.totalIncomeAmount)} | Gastos: -RD$ ${"%,.2f".format(rep.totalExpenseAmount)}",
+                                text = "Ingresos: +${com.gastabien.app.ui.components.formatMoney(rep.totalIncomeAmount)} | Gastos: -${com.gastabien.app.ui.components.formatMoney(rep.totalExpenseAmount)}",
                                 color = SecondaryFixed,
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 12.sp

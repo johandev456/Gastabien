@@ -35,7 +35,9 @@ val DOMINICAN_BANKS = listOf(
     BankFilterOption("POPULAR", "Banco Popular", "Popular", BankPopularAccent),
     BankFilterOption("BHD", "Banco BHD", "BHD", BankBhdAccent),
     BankFilterOption("PROMERICA", "Banco Promerica", "Promerica", BankPromericaAccent),
-    BankFilterOption("QIK", "Qik Banco Digital", "Qik", BankQikAccent)
+    BankFilterOption("QIK", "Qik Banco Digital", "Qik", BankQikAccent),
+    // Manual / cash entries (matches the backend's MANUAL bank code)
+    BankFilterOption("MANUAL", "Manual / Efectivo", "Manual", Outline)
 )
 
 @Composable

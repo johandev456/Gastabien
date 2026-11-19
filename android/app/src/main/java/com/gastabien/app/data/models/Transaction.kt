@@ -7,10 +7,10 @@ data class Transaction(
     @SerializedName("userId") val userId: String,
     @SerializedName("externalId") val externalId: String? = null,
     @SerializedName("bank") val bank: String,
-    @SerializedName("bankName") val bankName: String,
+    @SerializedName("bankName") val bankName: String? = null,
     @SerializedName("type") val type: String, // EXPENSE, INCOME, TRANSFER
     @SerializedName("amount") val amount: Double,
-    @SerializedName("currency") val currency: String = "DOP",
+    @SerializedName("currency") val currency: String? = "DOP",
     @SerializedName("amountInDop") val amountInDop: Double? = null,
     @SerializedName("exchangeRate") val exchangeRate: Double? = null,
     @SerializedName("merchant") val merchant: String,
@@ -18,9 +18,17 @@ data class Transaction(
     @SerializedName("date") val date: String,
     @SerializedName("category") val category: String,
     @SerializedName("notes") val notes: String? = null,
-    @SerializedName("isManual") val isManual: Boolean = false,
+    @SerializedName("isManual") val isManual: Boolean? = false,
     @SerializedName("createdAt") val createdAt: String? = null
-)
+) {
+    /** Currency with a safe default (Gson may leave it null). */
+    val currencyCode: String get() = currency ?: "DOP"
+    val isUsd: Boolean get() = currencyCode == "USD"
+    val bankLabel: String get() = bankName ?: bank
+
+    /** Amount converted to DOP, preferring the server-computed value. */
+    fun amountDop(rate: Double): Double = amountInDop ?: if (isUsd) amount * rate else amount
+}
 
 data class TransactionResponse(
     @SerializedName("count") val count: Int,
@@ -28,14 +36,16 @@ data class TransactionResponse(
 )
 
 data class CreateTransactionRequest(
-    val merchant: String,
-    val amount: Double,
-    val currency: String = "DOP",
-    val category: String? = null,
-    val bank: String = "POPULAR",
-    val bankName: String = "Banco Popular",
-    val type: String = "EXPENSE",
-    val notes: String? = null
+    @SerializedName("merchant") val merchant: String,
+    @SerializedName("amount") val amount: Double,
+    @SerializedName("currency") val currency: String = "DOP",
+    @SerializedName("category") val category: String? = null,
+    @SerializedName("bank") val bank: String = "MANUAL",
+    @SerializedName("bankName") val bankName: String = "Registro Manual / Efectivo",
+    @SerializedName("type") val type: String = "EXPENSE",
+    @SerializedName("notes") val notes: String? = null,
+    /** YYYY-MM-DD in Dominican time (server stores it at noon DR). */
+    @SerializedName("date") val date: String? = null
 )
 
 data class UpdateCategoryRequest(
@@ -57,7 +67,8 @@ data class SyncResponse(
     val emailsProcessed: Int,
     val newTransactionsCount: Int,
     val transactions: List<Transaction>? = null,
-    val error: String? = null
+    val error: String? = null,
+    val removedCount: Int? = null
 )
 
 data class StatementSyncRequest(
@@ -93,16 +104,18 @@ data class ReconciliationReport(
 
 data class StatementSyncResponse(
     val success: Boolean,
-    val message: String,
+    val message: String? = null,
+    val error: String? = null,
     val report: ReconciliationReport? = null
 )
 
 data class AuthUser(
     val id: String,
     val email: String,
-    val name: String,
+    val name: String? = null,
     val lastSyncAt: String? = null,
-    val hasGmailConnected: Boolean = false
+    val hasGmailConnected: Boolean = false,
+    val needsReconnect: Boolean = false
 )
 
 data class AuthStatusResponse(
@@ -125,6 +138,6 @@ data class ParseRawEmailRequest(
 
 data class ParseRawEmailResponse(
     val success: Boolean,
-    val message: String,
+    val message: String? = null,
     val transaction: Transaction? = null
 )

@@ -15,6 +15,9 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.automirrored.filled.ReceiptLong
+import androidx.compose.material.icons.automirrored.filled.TrendingUp
+import androidx.compose.material.icons.automirrored.filled.TrendingDown
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -51,10 +54,14 @@ fun DashboardScreen(
     isSyncing: Boolean,
     onSyncClick: () -> Unit,
     onStatementClick: () -> Unit,
-    onAddClick: () -> Unit
+    onAddClick: () -> Unit,
+    /** All movements for the current bank/month filter (category drill-down uses every one, not 10). */
+    transactions: List<Transaction>? = null,
+    loadError: String? = null,
+    onRetry: () -> Unit = {}
 ) {
 
-    val dopFormat = NumberFormat.getCurrencyInstance(Locale("es", "DO"))
+    val dopFormat = remember { NumberFormat.getCurrencyInstance(Locale.forLanguageTag("es-DO")) }
     var dropdownExpanded by remember { mutableStateOf(false) }
 
     Scaffold(
@@ -190,13 +197,20 @@ fun DashboardScreen(
                 ) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Text(
-                            text = "Error al sincronizar datos bancarios",
+                            text = "No se pudieron cargar tus datos",
                             color = ErrorColor,
                             fontWeight = FontWeight.Bold
                         )
+                        Text(
+                            text = summaryState.message,
+                            color = OnSurfaceVariant,
+                            fontSize = 12.sp,
+                            modifier = Modifier.padding(horizontal = 24.dp, vertical = 4.dp)
+                        )
                         Spacer(modifier = Modifier.height(10.dp))
                         Button(
-                            onClick = onSyncClick,
+                            // Plain reload (does NOT trigger a Gmail sync)
+                            onClick = onRetry,
                             colors = ButtonDefaults.buttonColors(containerColor = SurfaceContainerHigh),
                             shape = RoundedCornerShape(12.dp)
                         ) {
@@ -210,15 +224,16 @@ fun DashboardScreen(
                 val isCategoryActive = !selectedCategory.isNullOrBlank() && selectedCategory != "ALL"
 
                 // Filter transactions by selected category if active
+                val allFilteredTx = transactions ?: summary.recentTransactions
                 val filteredTransactions = if (isCategoryActive) {
-                    summary.recentTransactions.filter { it.category.equals(selectedCategory, ignoreCase = true) }
+                    allFilteredTx.filter { it.category.equals(selectedCategory, ignoreCase = true) }
                 } else {
                     summary.recentTransactions
                 }
 
                 // Category largest transactions (ranked by DOP value)
                 val categoryTransactions = if (isCategoryActive) {
-                    summary.recentTransactions
+                    allFilteredTx
                         .filter { it.category.equals(selectedCategory, ignoreCase = true) && it.type == "EXPENSE" }
                         .sortedByDescending { it.amountInDop ?: (if (it.currency.equals("USD", ignoreCase = true)) it.amount * (it.exchangeRate ?: 60.0) else it.amount) }
                 } else {
@@ -232,6 +247,33 @@ fun DashboardScreen(
                         .padding(horizontal = 16.dp),
                     verticalArrangement = Arrangement.spacedBy(14.dp)
                 ) {
+                    // Stale data warning: refresh failed but cached data is still shown
+                    if (loadError != null) {
+                        item {
+                            Surface(
+                                color = ErrorContainer.copy(alpha = 0.25f),
+                                shape = RoundedCornerShape(12.dp),
+                                border = androidx.compose.foundation.BorderStroke(1.dp, ErrorColor.copy(alpha = 0.35f)),
+                                modifier = Modifier.fillMaxWidth().padding(top = 4.dp)
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = "Datos sin actualizar: $loadError",
+                                        color = ErrorColor,
+                                        fontSize = 12.sp,
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                    TextButton(onClick = onRetry) {
+                                        Text("Reintentar", color = ErrorColor, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                                    }
+                                }
+                            }
+                        }
+                    }
+
                     // Month Filter Bar
                     item {
                         MonthFilterChips(
@@ -530,7 +572,7 @@ fun DashboardScreen(
                                     horizontalAlignment = Alignment.CenterHorizontally
                                 ) {
                                     Icon(
-                                        Icons.Default.ReceiptLong,
+                                        Icons.AutoMirrored.Filled.ReceiptLong,
                                         contentDescription = null,
                                         tint = OnSurfaceVariant,
                                         modifier = Modifier.size(32.dp)
@@ -710,7 +752,7 @@ fun TopCategoryComparisonCard(
                                     )
                                     val formattedDate = com.gastabien.app.ui.components.formatTransactionDate(tx.date)
                                     Text(
-                                        text = "• ${tx.bankName}${if (formattedDate.isNotEmpty()) " • $formattedDate" else ""}",
+                                        text = "• ${tx.bankLabel}${if (formattedDate.isNotEmpty()) " • $formattedDate" else ""}",
                                         fontSize = 10.sp,
                                         color = OnSurfaceVariant,
                                         maxLines = 1
@@ -850,7 +892,7 @@ fun HeroBalanceCard(summary: AnalyticsSummary, dopFormat: NumberFormat) {
                         horizontalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
                         Icon(
-                            if (isNetPositive) Icons.Default.TrendingUp else Icons.Default.TrendingDown,
+                            if (isNetPositive) Icons.AutoMirrored.Filled.TrendingUp else Icons.AutoMirrored.Filled.TrendingDown,
                             contentDescription = null,
                             tint = if (isNetPositive) Secondary else ErrorColor,
                             modifier = Modifier.size(12.dp)
@@ -901,7 +943,7 @@ fun HeroBalanceCard(summary: AnalyticsSummary, dopFormat: NumberFormat) {
 fun BentoKpiGrid(summary: AnalyticsSummary, dopFormat: NumberFormat) {
     val savingsPct = if (summary.totalIncome > 0) {
         val pct = ((summary.totalIncome - summary.totalExpenses) / summary.totalIncome) * 100.0
-        "%.1f%%".format(maxOf(0.0, pct))
+        com.gastabien.app.ui.components.formatPercent(maxOf(0.0, pct))
     } else {
         "0.0%"
     }
@@ -914,14 +956,14 @@ fun BentoKpiGrid(summary: AnalyticsSummary, dopFormat: NumberFormat) {
             BentoMiniCard(
                 title = "Gastos Totales",
                 amount = dopFormat.format(summary.totalExpenses),
-                icon = Icons.Default.TrendingDown,
+                icon = Icons.AutoMirrored.Filled.TrendingDown,
                 accentColor = ErrorColor,
                 modifier = Modifier.weight(1f)
             )
             BentoMiniCard(
-                title = "Ingresos del Mes",
+                title = if (summary.selectedMonth.isNullOrBlank() || summary.selectedMonth == "ALL") "Ingresos Totales" else "Ingresos del Mes",
                 amount = dopFormat.format(summary.totalIncome),
-                icon = Icons.Default.TrendingUp,
+                icon = Icons.AutoMirrored.Filled.TrendingUp,
                 accentColor = Secondary,
                 modifier = Modifier.weight(1f)
             )
@@ -940,8 +982,8 @@ fun BentoKpiGrid(summary: AnalyticsSummary, dopFormat: NumberFormat) {
                 modifier = Modifier.weight(1f)
             )
             BentoMiniCard(
-                title = "Bancos Vinculados",
-                amount = "${summary.byBank.size} Activos",
+                title = "Bancos con Actividad",
+                amount = "${summary.byBank.count { it.count > 0 }} Activos",
                 icon = Icons.Default.AccountBalance,
                 accentColor = Tertiary,
                 subtitle = "RD Bancos",
@@ -1087,7 +1129,7 @@ fun CategoryCardItem(
                         color = OnSurface
                     )
                     Text(
-                        text = "${cat.percentage}%",
+                        text = com.gastabien.app.ui.components.formatPercent(cat.percentage),
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Bold,
                         color = theme.color
@@ -1107,7 +1149,7 @@ fun CategoryCardItem(
             ) {
                 Box(
                     modifier = Modifier
-                        .fillMaxWidth((cat.percentage / 100f).toFloat().coerceIn(0.05f, 1f))
+                        .fillMaxWidth((cat.percentage / 100f).toFloat().coerceIn(0f, 1f))
                         .fillMaxHeight()
                         .clip(CircleShape)
                         .background(
@@ -1124,6 +1166,7 @@ fun CategoryCardItem(
 @Composable
 fun RecentTransactionItem(tx: Transaction, dopFormat: NumberFormat) {
     val isExpense = tx.type == "EXPENSE"
+    val visual = com.gastabien.app.ui.components.typeVisual(tx.type)
     val theme = getCategoryTheme(tx.category)
 
     GlassCard(modifier = Modifier.fillMaxWidth()) {
@@ -1137,13 +1180,17 @@ fun RecentTransactionItem(tx: Transaction, dopFormat: NumberFormat) {
                 modifier = Modifier
                     .size(40.dp)
                     .clip(RoundedCornerShape(12.dp))
-                    .background(if (isExpense) theme.containerColor else Secondary.copy(alpha = 0.15f)),
+                    .background(if (isExpense) theme.containerColor else visual.color.copy(alpha = 0.15f)),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
-                    if (isExpense) theme.icon else Icons.Default.ArrowUpward,
-                    contentDescription = null,
-                    tint = if (isExpense) theme.color else Secondary,
+                    when (tx.type) {
+                        "EXPENSE" -> theme.icon
+                        "TRANSFER" -> Icons.Default.SwapHoriz
+                        else -> Icons.Default.ArrowDownward
+                    },
+                    contentDescription = visual.label,
+                    tint = if (isExpense) theme.color else visual.color,
                     modifier = Modifier.size(19.dp)
                 )
             }
@@ -1165,10 +1212,13 @@ fun RecentTransactionItem(tx: Transaction, dopFormat: NumberFormat) {
                     horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
                     Text(
-                        text = tx.bankName,
+                        text = tx.bankLabel,
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Medium,
-                        color = Primary
+                        color = Primary,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false)
                     )
                     Text(
                         text = "•",
@@ -1178,7 +1228,10 @@ fun RecentTransactionItem(tx: Transaction, dopFormat: NumberFormat) {
                     Text(
                         text = tx.category,
                         fontSize = 11.sp,
-                        color = OnSurfaceVariant
+                        color = OnSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false)
                     )
                 }
                 val formattedDate = com.gastabien.app.ui.components.formatTransactionDate(tx.date)
@@ -1206,28 +1259,20 @@ fun RecentTransactionItem(tx: Transaction, dopFormat: NumberFormat) {
 
 
             Column(horizontalAlignment = Alignment.End) {
-                val isUsd = tx.currency.equals("USD", ignoreCase = true)
-                val effectiveDop = tx.amountInDop ?: (if (isUsd) tx.amount * (tx.exchangeRate ?: 60.0) else tx.amount)
-
+                val isUsd = tx.isUsd
+                Text(
+                    text = "${visual.sign}${com.gastabien.app.ui.components.formatMoney(tx.amount, tx.currencyCode)}",
+                    fontSize = if (isUsd) 13.sp else 14.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = visual.color,
+                    maxLines = 1
+                )
                 if (isUsd) {
                     Text(
-                        text = "${if (isExpense) "-" else "+"} $ ${String.format(Locale.US, "%.2f", tx.amount)} USD",
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = if (isExpense) ErrorColor else Secondary
-                    )
-                    Text(
-                        text = "≈ ${dopFormat.format(effectiveDop)}",
+                        text = "≈ ${com.gastabien.app.ui.components.formatMoney(tx.amountDop(tx.exchangeRate ?: 60.0))}",
                         fontSize = 10.sp,
                         fontWeight = FontWeight.Medium,
                         color = OnSurfaceVariant
-                    )
-                } else {
-                    Text(
-                        text = "${if (isExpense) "-" else "+"} ${dopFormat.format(tx.amount)}",
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = if (isExpense) ErrorColor else Secondary
                     )
                 }
             }

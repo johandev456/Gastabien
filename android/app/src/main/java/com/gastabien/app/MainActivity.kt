@@ -6,6 +6,11 @@ import android.os.Bundle
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.consumeWindowInsets
+import androidx.compose.material.icons.automirrored.filled.ReceiptLong
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.activity.viewModels
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -29,7 +34,7 @@ import com.gastabien.app.ui.theme.*
 
 sealed class BottomNavItem(val route: String, val title: String, val icon: ImageVector) {
     object Dashboard : BottomNavItem("dashboard", "Resumen", Icons.Default.Dashboard)
-    object Transactions : BottomNavItem("transactions", "Movimientos", Icons.Default.ReceiptLong)
+    object Transactions : BottomNavItem("transactions", "Movimientos", Icons.AutoMirrored.Filled.ReceiptLong)
     object Categories : BottomNavItem("categories", "Categorías", Icons.Default.PieChart)
     object Banks : BottomNavItem("banks", "Bancos", Icons.Default.AccountBalance)
 }
@@ -38,7 +43,15 @@ class MainActivity : ComponentActivity() {
 
     private val viewModel: MainViewModel by viewModels()
 
+    override fun onResume() {
+        super.onResume()
+        // Returning from the Google sign-in in the browser: refresh the Gmail connection state
+        viewModel.loadAuthStatus()
+    }
+
+    @OptIn(ExperimentalLayoutApi::class)
     override fun onCreate(savedInstanceState: Bundle?) {
+        enableEdgeToEdge()
         super.onCreate(savedInstanceState)
 
         setContent {
@@ -52,15 +65,20 @@ class MainActivity : ComponentActivity() {
                 val isSyncing by viewModel.isSyncing.collectAsState()
                 val syncMessage by viewModel.syncMessage.collectAsState()
                 val authStatus by viewModel.authStatus.collectAsState()
+                val searchQuery by viewModel.searchQuery.collectAsState()
+                val loadError by viewModel.loadError.collectAsState()
+                val usdRate = (summaryState as? UiState.Success)?.data?.rate ?: 60.0
+                val filteredTransactions = (transactionsState as? UiState.Success)?.data
 
-                var showAddDialog by remember { mutableStateOf(false) }
-                var showStatementDialog by remember { mutableStateOf(false) }
-                var showGmailSyncDialog by remember { mutableStateOf(false) }
+                // Survive rotation / process recreation
+                var showAddDialog by rememberSaveable { mutableStateOf(false) }
+                var showStatementDialog by rememberSaveable { mutableStateOf(false) }
+                var showGmailSyncDialog by rememberSaveable { mutableStateOf(false) }
                 var statementReport by remember { mutableStateOf<StatementSyncResponse?>(null) }
 
                 LaunchedEffect(syncMessage) {
                     syncMessage?.let { msg ->
-                        Toast.makeText(this@MainActivity, msg, Toast.LENGTH_SHORT).show()
+                        Toast.makeText(this@MainActivity, msg, Toast.LENGTH_LONG).show()
                         viewModel.clearSyncMessage()
                     }
                 }
@@ -114,7 +132,11 @@ class MainActivity : ComponentActivity() {
                     NavHost(
                         navController = navController,
                         startDestination = BottomNavItem.Dashboard.route,
-                        modifier = Modifier.padding(innerPadding)
+                        // Each screen has its own Scaffold/TopAppBar: mark the system bar insets that the
+                        // outer Scaffold already applied as consumed, so they are not padded twice.
+                        modifier = Modifier
+                            .padding(innerPadding)
+                            .consumeWindowInsets(innerPadding)
                     ) {
                         composable(BottomNavItem.Dashboard.route) {
                             DashboardScreen(
@@ -132,7 +154,10 @@ class MainActivity : ComponentActivity() {
                                     })
                                 },
                                 onStatementClick = { showStatementDialog = true },
-                                onAddClick = { showAddDialog = true }
+                                onAddClick = { showAddDialog = true },
+                                transactions = filteredTransactions,
+                                loadError = loadError,
+                                onRetry = { viewModel.refreshAll() }
                             )
                         }
                         composable(BottomNavItem.Transactions.route) {
@@ -148,10 +173,13 @@ class MainActivity : ComponentActivity() {
                                 onSelectCategory = { viewModel.selectCategory(it) },
                                 onDeleteClick = { id -> viewModel.deleteTransaction(id) },
                                 onCategoryChange = { id, cat -> viewModel.updateCategory(id, cat) },
-                                onSearchChange = { query -> viewModel.loadTransactions(search = query) },
-                                onUpdateTransaction = { id, amount, currency, category ->
-                                    viewModel.updateTransaction(id = id, amount = amount, currency = currency, category = category)
-                                }
+                                searchQuery = searchQuery,
+                                onSearchChange = { query -> viewModel.setSearchQuery(query) },
+                                onUpdateTransaction = { id, amount, currency, category, type ->
+                                    viewModel.updateTransaction(id = id, amount = amount, currency = currency, category = category, type = type)
+                                },
+                                usdRate = usdRate,
+                                onRetry = { viewModel.refreshAll() }
                             )
                         }
 
@@ -161,7 +189,10 @@ class MainActivity : ComponentActivity() {
                                 selectedBank = selectedBank,
                                 onSelectBank = { viewModel.selectBank(it) },
                                 selectedCategory = selectedCategory,
-                                onSelectCategory = { viewModel.selectCategory(it) }
+                                onSelectCategory = { viewModel.selectCategory(it) },
+                                selectedMonth = selectedMonth,
+                                onSelectMonth = { viewModel.selectMonth(it) },
+                                transactions = filteredTransactions
                             )
                         }
                         composable(BottomNavItem.Banks.route) {
@@ -182,7 +213,8 @@ class MainActivity : ComponentActivity() {
                     if (showAddDialog) {
                         AddExpenseDialog(
                             onDismiss = { showAddDialog = false },
-                            onConfirm = { merchant, amount, currency, category, bank, bankName, type, notes ->
+                            usdRate = usdRate,
+                            onConfirm = { merchant, amount, currency, category, bank, bankName, type, notes, date ->
                                 viewModel.addManualTransaction(
                                     merchant = merchant,
                                     amount = amount,
@@ -191,7 +223,8 @@ class MainActivity : ComponentActivity() {
                                     bank = bank,
                                     bankName = bankName,
                                     type = type,
-                                    notes = notes
+                                    notes = notes,
+                                    date = date
                                 )
                                 showAddDialog = false
                             }

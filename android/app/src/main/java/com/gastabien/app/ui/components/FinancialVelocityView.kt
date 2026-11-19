@@ -32,10 +32,13 @@ fun FinancialVelocityView(
     val totalIncome = summary.totalIncome
     val expenseTxs = summary.recentTransactions.filter { it.type == "EXPENSE" }
 
-    // Metrics computation
-    val dailyBurnRate = if (totalExpenses > 0) totalExpenses / 30.0 else 0.0
-    val avgTicket = if (expenseTxs.isNotEmpty()) totalExpenses / expenseTxs.size else 0.0
-    val maxTx = expenseTxs.maxByOrNull { it.amountInDop ?: (if (it.currency.equals("USD", ignoreCase = true)) it.amount * (it.exchangeRate ?: 60.0) else it.amount) }
+    // Metrics computed by the server over ALL filtered expenses (fallback: the 10 recent ones)
+    val periodDays = periodLengthInDays(summary)
+    val dailyBurnRate = if (totalExpenses > 0) totalExpenses / periodDays else 0.0
+    val avgTicket = summary.averageExpense
+        ?: if (expenseTxs.isNotEmpty()) totalExpenses / expenseTxs.size else 0.0
+    val maxTx = summary.largestExpense
+        ?: expenseTxs.maxByOrNull { it.amountInDop ?: (if (it.currency.equals("USD", ignoreCase = true)) it.amount * (it.exchangeRate ?: 60.0) else it.amount) }
 
     // Grouping by lifestyle categories
     val essentialsCategories = listOf("supermercado", "alimento", "combustible", "gasolina", "salud", "farmacia")
@@ -112,16 +115,29 @@ fun FinancialVelocityView(
                         }
                     }
 
+                    // Real status instead of a fixed label: spending above income is flagged
+                    val overspending = totalIncome > 0 && totalExpenses > totalIncome
+                    val paceColor = when {
+                        overspending -> ErrorColor
+                        totalIncome <= 0 -> OnSurfaceVariant
+                        else -> Secondary
+                    }
+                    val paceLabel = when {
+                        overspending -> "Gasto > Ingresos"
+                        totalIncome <= 0 -> "Sin ingresos"
+                        totalExpenses > totalIncome * 0.8 -> "Ritmo Alto"
+                        else -> "Ritmo Controlado"
+                    }
                     Surface(
                         shape = RoundedCornerShape(10.dp),
-                        color = Secondary.copy(alpha = 0.15f),
-                        border = androidx.compose.foundation.BorderStroke(1.dp, Secondary.copy(alpha = 0.3f))
+                        color = paceColor.copy(alpha = 0.15f),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, paceColor.copy(alpha = 0.3f))
                     ) {
                         Text(
-                            text = "Ritmo Controlado",
+                            text = paceLabel,
                             fontSize = 10.sp,
                             fontWeight = FontWeight.Bold,
-                            color = Secondary,
+                            color = paceColor,
                             modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
                         )
                     }
@@ -257,7 +273,7 @@ fun FinancialVelocityView(
                             Text("Básicos (Super + Gasolina)", fontSize = 12.sp, color = OnSurface)
                         }
                         Text(
-                            text = "%.1f%% (%s)".format(essentialsPct, dopFormat.format(essentialsSum)),
+                            text = "${com.gastabien.app.ui.components.formatPercent(essentialsPct)} (${dopFormat.format(essentialsSum)})",
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Bold,
                             color = Secondary
@@ -275,7 +291,7 @@ fun FinancialVelocityView(
                             Text("Ocio & Bares / Salidas", fontSize = 12.sp, color = OnSurface)
                         }
                         Text(
-                            text = "%.1f%% (%s)".format(lifestylePct, dopFormat.format(lifestyleSum)),
+                            text = "${com.gastabien.app.ui.components.formatPercent(lifestylePct)} (${dopFormat.format(lifestyleSum)})",
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Bold,
                             color = Color(0xFFD500F9)
@@ -293,7 +309,7 @@ fun FinancialVelocityView(
                             Text("Servicios & Otros", fontSize = 12.sp, color = OnSurface)
                         }
                         Text(
-                            text = "%.1f%% (%s)".format(othersPct, dopFormat.format(othersSum)),
+                            text = "${com.gastabien.app.ui.components.formatPercent(othersPct)} (${dopFormat.format(othersSum)})",
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Bold,
                             color = Primary
@@ -349,7 +365,7 @@ fun FinancialVelocityView(
                                 color = OnSurface
                             )
                             Text(
-                                text = "${maxTx.bankName} • ${maxTx.category}",
+                                text = "${maxTx.bankLabel} • ${maxTx.category}",
                                 fontSize = 10.sp,
                                 color = Primary
                             )
@@ -386,4 +402,24 @@ fun FinancialVelocityView(
             }
         }
     }
+}
+
+/**
+ * Days covered by the current filter: elapsed days of the selected month (DR time) or, for
+ * "all months", roughly 30 days per month with data. Used for a realistic daily spend rate.
+ */
+private fun periodLengthInDays(summary: AnalyticsSummary): Double {
+    val month = summary.selectedMonth
+    if (!month.isNullOrBlank() && month != "ALL") {
+        return try {
+            val ym = java.time.YearMonth.parse(month)
+            val today = java.time.LocalDate.now(java.time.ZoneId.of("America/Santo_Domingo"))
+            val days = if (ym == java.time.YearMonth.from(today)) today.dayOfMonth else ym.lengthOfMonth()
+            days.coerceAtLeast(1).toDouble()
+        } catch (_: Exception) {
+            30.0
+        }
+    }
+    val months = (summary.availableMonths?.size ?: summary.monthlyTrend.size).coerceAtLeast(1)
+    return months * 30.0
 }

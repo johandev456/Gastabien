@@ -34,7 +34,8 @@ fun DominicanBankShareView(
     modifier: Modifier = Modifier
 ) {
     val totalExpenses = summary.totalExpenses
-    val bankDistributions = summary.byBank
+    // Only banks with movements in the current filter (the backend lists every supported bank)
+    val bankDistributions = summary.byBank.filter { it.count > 0 }
 
     Column(
         modifier = modifier.fillMaxWidth(),
@@ -171,7 +172,7 @@ fun DominicanBankShareView(
                                 Column(modifier = Modifier.weight(1f)) {
                                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                                         Text(
-                                            text = bank.bankName,
+                                            text = bank.bankName ?: bank.bank,
                                             fontSize = 13.sp,
                                             fontWeight = FontWeight.Bold,
                                             color = OnSurface,
@@ -188,7 +189,7 @@ fun DominicanBankShareView(
                                         }
                                     }
                                     Text(
-                                        text = "${bank.count} movimientos • ${"%.1f%%".format(pct)} del total",
+                                        text = "${bank.count} movimientos • ${com.gastabien.app.ui.components.formatPercent(pct)} del total",
                                         fontSize = 11.sp,
                                         color = OnSurfaceVariant,
                                         maxLines = 1,
@@ -217,7 +218,7 @@ fun DominicanBankShareView(
                         ) {
                             Box(
                                 modifier = Modifier
-                                    .fillMaxWidth((pct / 100.0).toFloat().coerceIn(0.05f, 1f))
+                                    .fillMaxWidth((pct / 100.0).toFloat().coerceIn(0f, 1f))
                                     .fillMaxHeight()
                                     .clip(CircleShape)
                                     .background(

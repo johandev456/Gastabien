@@ -136,11 +136,15 @@ fun InteractiveDonutChart(
                     contentAlignment = Alignment.Center
                 ) {
                     // Canvas Donut Chart
+                    // Colors resolved once per recomposition, not on every frame inside the draw lambda
+                    val sliceColors = remember(categories) { categories.map { getCategoryTheme(it.category).color } }
                     Canvas(
                         modifier = Modifier.fillMaxSize()
                     ) {
                         val strokeWidth = 24.dp.toPx()
-                        val diameter = size.minDimension - strokeWidth
+                        val selectedExtra = 6.dp.toPx()
+                        // Leave room for the thicker selected slice so it never spills out of the canvas
+                        val diameter = size.minDimension - strokeWidth - selectedExtra
                         val radius = diameter / 2f
                         val center = Offset(size.width / 2f, size.height / 2f)
                         val arcSize = Size(diameter, diameter)
@@ -155,16 +159,20 @@ fun InteractiveDonutChart(
                         )
 
                         var currentStartAngle = -90f
-                        val gapAngle = if (categories.size > 1) 3f else 0f
+                        val gapAngle = if (categories.size > 1) 2f else 0f
                         val availableDegrees = 360f - (gapAngle * categories.size)
+                        // Minimum visible sweep for tiny categories, then normalize so the total is exactly 360°
+                        val minSweep = 1.5f
+                        val rawSweeps = categories.map { ((it.total / total) * availableDegrees).toFloat().coerceAtLeast(minSweep) }
+                        val scale = availableDegrees / rawSweeps.sum().coerceAtLeast(0.001f)
 
-                        categories.forEach { cat ->
-                            val sweepAngle = ((cat.total / total) * availableDegrees).toFloat().coerceAtLeast(1f)
+                        categories.forEachIndexed { index, cat ->
+                            val sweepAngle = rawSweeps[index] * scale
                             val isSelected = selectedCategory.equals(cat.category, ignoreCase = true)
-                            val theme = getCategoryTheme(cat.category)
+                            val baseColor = sliceColors.getOrElse(index) { Outline }
 
-                            val effectiveStroke = if (isSelected) strokeWidth + 6.dp.toPx() else strokeWidth
-                            val effectiveColor = if (isCategoryActive && !isSelected) theme.color.copy(alpha = 0.28f) else theme.color
+                            val effectiveStroke = if (isSelected) strokeWidth + selectedExtra else strokeWidth
+                            val effectiveColor = if (isCategoryActive && !isSelected) baseColor.copy(alpha = 0.28f) else baseColor
 
                             drawArc(
                                 color = effectiveColor,
@@ -173,7 +181,8 @@ fun InteractiveDonutChart(
                                 useCenter = false,
                                 topLeft = Offset(center.x - radius, center.y - radius),
                                 size = arcSize,
-                                style = Stroke(width = effectiveStroke, cap = StrokeCap.Round)
+                                // Butt caps: round caps add ~8° per slice and made slices overlap the gaps
+                                style = Stroke(width = effectiveStroke, cap = StrokeCap.Butt)
                             )
 
                             currentStartAngle += sweepAngle + gapAngle
@@ -217,10 +226,14 @@ fun InteractiveDonutChart(
                                     fontSize = 11.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = OnSurface,
-                                    maxLines = 1
+                                    maxLines = 2,
+                                    lineHeight = 12.sp,
+                                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
                                 )
                                 Text(
-                                    text = dopFormat.format(activeCatObj.total),
+                                    text = compactMoney(activeCatObj.total),
+                                    maxLines = 1,
                                     fontSize = 13.sp,
                                     fontWeight = FontWeight.ExtraBold,
                                     color = theme.color
@@ -231,7 +244,7 @@ fun InteractiveDonutChart(
                                     modifier = Modifier.padding(top = 2.dp)
                                 ) {
                                     Text(
-                                        text = "${activeCatObj.percentage}% del total",
+                                        text = "${formatPercent(activeCatObj.percentage)} del total",
                                         fontSize = 9.sp,
                                         fontWeight = FontWeight.Bold,
                                         color = theme.color,
@@ -248,7 +261,8 @@ fun InteractiveDonutChart(
                                 )
                                 Spacer(modifier = Modifier.height(2.dp))
                                 Text(
-                                    text = dopFormat.format(total),
+                                    text = compactMoney(total),
+                                    maxLines = 1,
                                     fontSize = 14.sp,
                                     fontWeight = FontWeight.ExtraBold,
                                     color = OnSurface
@@ -311,7 +325,7 @@ fun InteractiveDonutChart(
                                     color = if (isSelected) OnSurface else OnSurfaceVariant
                                 )
                                 Text(
-                                    text = "${cat.percentage}%",
+                                    text = formatPercent(cat.percentage),
                                     fontSize = 11.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = theme.color
@@ -323,4 +337,11 @@ fun InteractiveDonutChart(
             }
         }
     }
+}
+
+/** Fits the 138dp center disc: full amount up to 6 digits, compact (RD$1.2M) beyond that. */
+private fun compactMoney(amount: Double): String = when {
+    amount >= 1_000_000 -> "RD$" + String.format(java.util.Locale.US, "%.2fM", amount / 1_000_000)
+    amount >= 100_000 -> "RD$" + String.format(java.util.Locale.US, "%.1fK", amount / 1_000)
+    else -> formatMoney(amount)
 }
