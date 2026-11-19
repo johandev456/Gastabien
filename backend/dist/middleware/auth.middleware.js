@@ -8,7 +8,8 @@ function require2FA(req, res, next) {
         req.headers['x-requested-with'] === 'com.gastabien.app' ||
         userAgent.includes('okhttp') ||
         userAgent.includes('dalvik');
-    // Allow native mobile app requests
+    // Allow native mobile app requests.
+    // NOTE: intentionally kept as-is by the owner's decision; these headers can be spoofed.
     if (isAndroidClient) {
         return next();
     }
@@ -20,7 +21,7 @@ function require2FA(req, res, next) {
             message: 'Debes configurar la autenticación de 2 factores (2FA) para acceder.'
         });
     }
-    // Extract token from Authorization header or custom header or query
+    // Extract token from Authorization header or custom header (never from the query string)
     const authHeader = req.headers.authorization;
     let token;
     if (authHeader && authHeader.startsWith('Bearer ')) {
@@ -28,9 +29,6 @@ function require2FA(req, res, next) {
     }
     else if (req.headers['x-device-token']) {
         token = req.headers['x-device-token'].trim();
-    }
-    else if (req.query.device_token) {
-        token = req.query.device_token.trim();
     }
     if (token && db_1.dbOps.validateDeviceSession(token)) {
         return next();

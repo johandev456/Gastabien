@@ -1,14 +1,29 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { CONFIG } from '../config';
-import { Transaction, Category, BankCode, TransactionType } from '../types';
+import { Transaction, Category, TransactionType } from '../types';
 
 let supabaseClient: SupabaseClient | null = null;
+let clientKeyFingerprint = '';
 
-export function getSupabaseClient(): SupabaseClient | null {
-  if (supabaseClient) return supabaseClient;
+// Whether the transactions table has the optional `category_overridden` column (migration v2).
+let supportsOverrideColumn = false;
 
+const PAGE_SIZE = 1000;
+
+function resolveCredentials() {
   const url = CONFIG.SUPABASE?.URL || process.env.SUPABASE_URL || '';
   const key = CONFIG.SUPABASE?.KEY || process.env.SUPABASE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || '';
+  return { url, key };
+}
+
+export function getSupabaseClient(): SupabaseClient | null {
+  const { url, key } = resolveCredentials();
+  const fingerprint = `${url}|${key}`;
+
+  // Re-create the client when credentials change at runtime (e.g. /auth/supabase/config)
+  if (supabaseClient && fingerprint === clientKeyFingerprint) return supabaseClient;
+  supabaseClient = null;
+  clientKeyFingerprint = fingerprint;
 
   if (url && key && url.startsWith('http')) {
     try {
@@ -26,6 +41,28 @@ export function getSupabaseClient(): SupabaseClient | null {
 
 export function isSupabaseConfigured(): boolean {
   return getSupabaseClient() !== null;
+}
+
+/** Throws if a Supabase response carries an error, so callers/queues can retry. */
+function check<T extends { error: any }>(res: T, context: string): T {
+  if (res.error) {
+    throw new Error(`[SUPABASE] ${context}: ${res.error.message || res.error}`);
+  }
+  return res;
+}
+
+/** Loads every row of a table using range pagination (PostgREST caps responses at 1000 rows). */
+async function selectAll(client: SupabaseClient, table: string, orderBy?: string): Promise<any[]> {
+  const rows: any[] = [];
+  for (let from = 0; ; from += PAGE_SIZE) {
+    let query = client.from(table).select('*');
+    if (orderBy) query = query.order(orderBy, { ascending: true });
+    const res = check(await query.range(from, from + PAGE_SIZE - 1), `Error leyendo ${table}`);
+    const data = res.data || [];
+    rows.push(...data);
+    if (data.length < PAGE_SIZE) break;
+  }
+  return rows;
 }
 
 // Convert DB snake_case row to camelCase Transaction model
@@ -51,6 +88,7 @@ function mapRowToTransaction(row: any): Transaction {
     confidenceScore: row.confidence_score ? parseFloat(row.confidence_score) : 1.0,
     notes: row.notes || undefined,
     isManual: !!row.is_manual,
+    categoryOverridden: !!row.category_overridden,
     createdAt: row.created_at,
     updatedAt: row.updated_at
   };
@@ -58,7 +96,7 @@ function mapRowToTransaction(row: any): Transaction {
 
 // Convert camelCase Transaction model to DB snake_case row
 function mapTransactionToRow(tx: Transaction): any {
-  return {
+  const row: any = {
     id: tx.id,
     user_id: tx.userId,
     external_id: tx.externalId || null,
@@ -82,6 +120,21 @@ function mapTransactionToRow(tx: Transaction): any {
     created_at: typeof tx.createdAt === 'string' ? tx.createdAt : (tx.createdAt as Date || new Date()).toISOString(),
     updated_at: typeof tx.updatedAt === 'string' ? tx.updatedAt : (tx.updatedAt as Date || new Date()).toISOString()
   };
+  if (supportsOverrideColumn) {
+    row.category_overridden = !!tx.categoryOverridden;
+  }
+  return row;
+}
+
+export interface SupabaseSnapshot {
+  users: Record<string, any>;
+  transactions: Record<string, Transaction>;
+  sync_logs: any[];
+  reconciled_periods: any[];
+  ignored_external_ids: Record<string, string[]>;
+  two_factor_auth?: any;
+  device_sessions: Record<string, any>;
+  oauth_config?: any;
 }
 
 export const supabaseOps = {
@@ -91,7 +144,7 @@ export const supabaseOps = {
       return { connected: false, message: 'SUPABASE_URL y SUPABASE_KEY no configurados.' };
     }
     try {
-      const { data, error } = await client.from('transactions').select('id').limit(1);
+      const { error } = await client.from('transactions').select('id').limit(1);
       if (error) {
         return { connected: false, message: `Error en Supabase: ${error.message}` };
       }
@@ -101,343 +154,274 @@ export const supabaseOps = {
     }
   },
 
-  async loadAll(): Promise<{
-    users: Record<string, any>;
-    transactions: Record<string, Transaction>;
-    sync_logs: any[];
-    reconciled_periods: any[];
-    ignored_external_ids: Record<string, string[]>;
-    two_factor_auth?: any;
-    device_sessions: Record<string, any>;
-    oauth_config?: any;
-  } | null> {
+  /**
+   * Loads the full cloud snapshot. THROWS on any table error so callers never confuse
+   * "Supabase failed" with "Supabase is empty" (which would trigger a destructive re-seed).
+   */
+  async loadAll(): Promise<SupabaseSnapshot | null> {
     const client = getSupabaseClient();
     if (!client) return null;
 
-    try {
-      console.log('[SUPABASE] Cargando datos completos desde la nube...');
+    console.log('[SUPABASE] Cargando datos completos desde la nube...');
 
-      // Load all tables in parallel
-      const [
-        usersRes,
-        txRes,
-        twoFactorRes,
-        sessionsRes,
-        reconciledRes,
-        ignoredRes,
-        syncLogsRes,
-        configRes
-      ] = await Promise.all([
-        client.from('users').select('*'),
-        client.from('transactions').select('*'),
+    const [usersRows, txRows, twoFactorRes, sessionRows, reconciledRows, ignoredRows, syncLogsRes, configRows, overrideProbe] =
+      await Promise.all([
+        selectAll(client, 'users'),
+        selectAll(client, 'transactions', 'id'),
         client.from('two_factor_auth').select('*').limit(1),
-        client.from('device_sessions').select('*'),
-        client.from('reconciled_periods').select('*'),
-        client.from('ignored_external_ids').select('*'),
+        selectAll(client, 'device_sessions'),
+        selectAll(client, 'reconciled_periods'),
+        selectAll(client, 'ignored_external_ids'),
         client.from('sync_logs').select('*').order('created_at', { ascending: false }).limit(100),
-        client.from('app_config').select('*')
+        selectAll(client, 'app_config'),
+        client.from('transactions').select('category_overridden').limit(1)
       ]);
 
-      const users: Record<string, any> = {};
-      if (usersRes.data) {
-        for (const u of usersRes.data) {
-          users[u.id] = {
-            id: u.id,
-            email: u.email,
-            name: u.name,
-            google_refresh_token: u.google_refresh_token,
-            google_access_token: u.google_access_token,
-            token_expiry: u.token_expiry,
-            created_at: u.created_at,
-            last_sync_at: u.last_sync_at
-          };
-        }
-      }
-
-      const transactions: Record<string, Transaction> = {};
-      if (txRes.data) {
-        for (const r of txRes.data) {
-          const tx = mapRowToTransaction(r);
-          transactions[tx.id] = tx;
-        }
-      }
-
-      let two_factor_auth: any = undefined;
-      if (twoFactorRes.data && twoFactorRes.data.length > 0) {
-        const row = twoFactorRes.data[0];
-        two_factor_auth = {
-          secret: row.secret,
-          enabled: !!row.enabled,
-          backupCodes: Array.isArray(row.backup_codes) ? row.backup_codes : (typeof row.backup_codes === 'string' ? JSON.parse(row.backup_codes) : []),
-          createdAt: row.created_at,
-          updatedAt: row.updated_at
-        };
-      }
-
-      const device_sessions: Record<string, any> = {};
-      if (sessionsRes.data) {
-        for (const s of sessionsRes.data) {
-          device_sessions[s.token] = {
-            token: s.token,
-            deviceId: s.device_id,
-            userAgent: s.user_agent,
-            createdAt: s.created_at,
-            lastUsedAt: s.last_used_at
-          };
-        }
-      }
-
-      const reconciled_periods: any[] = [];
-      if (reconciledRes.data) {
-        for (const p of reconciledRes.data) {
-          reconciled_periods.push({
-            userId: p.user_id,
-            bank: p.bank,
-            startDate: p.start_date,
-            endDate: p.end_date,
-            reconciledAt: p.reconciled_at
-          });
-        }
-      }
-
-      const ignored_external_ids: Record<string, string[]> = {};
-      if (ignoredRes.data) {
-        for (const ig of ignoredRes.data) {
-          if (!ignored_external_ids[ig.user_id]) {
-            ignored_external_ids[ig.user_id] = [];
-          }
-          ignored_external_ids[ig.user_id].push(ig.external_id);
-        }
-      }
-
-      const sync_logs = (syncLogsRes.data || []).map((l: any) => ({
-        id: l.id,
-        user_id: l.user_id,
-        status: l.status,
-        emails_processed: l.emails_processed,
-        transactions_found: l.transactions_found,
-        error_message: l.error_message,
-        created_at: l.created_at
-      }));
-
-      let oauth_config: any = undefined;
-      if (configRes.data) {
-        const oauthRow = configRes.data.find((c: any) => c.key === 'oauth_google');
-        if (oauthRow) {
-          oauth_config = typeof oauthRow.value === 'string' ? JSON.parse(oauthRow.value) : oauthRow.value;
-        }
-      }
-
-      console.log(`[SUPABASE] Sincronización exitosa: ${Object.keys(transactions).length} transacciones cargadas de Supabase.`);
-
-      return {
-        users,
-        transactions,
-        sync_logs,
-        reconciled_periods,
-        ignored_external_ids,
-        two_factor_auth,
-        device_sessions,
-        oauth_config
-      };
-    } catch (err) {
-      console.error('[SUPABASE] Error cargando datos de Supabase:', err);
-      return null;
+    check(twoFactorRes, 'Error leyendo two_factor_auth');
+    check(syncLogsRes, 'Error leyendo sync_logs');
+    supportsOverrideColumn = !overrideProbe.error;
+    if (!supportsOverrideColumn) {
+      console.warn('[SUPABASE] Columna category_overridden no existe. Ejecuta la migración v2 de supabase_schema.sql para conservar categorías editadas.');
     }
+
+    const users: Record<string, any> = {};
+    for (const u of usersRows) {
+      users[u.id] = {
+        id: u.id,
+        email: u.email,
+        name: u.name,
+        google_refresh_token: u.google_refresh_token,
+        google_access_token: u.google_access_token,
+        token_expiry: u.token_expiry,
+        created_at: u.created_at,
+        last_sync_at: u.last_sync_at
+      };
+    }
+
+    const transactions: Record<string, Transaction> = {};
+    for (const r of txRows) {
+      const tx = mapRowToTransaction(r);
+      transactions[tx.id] = tx;
+    }
+
+    let two_factor_auth: any = undefined;
+    if (twoFactorRes.data && twoFactorRes.data.length > 0) {
+      const row = twoFactorRes.data[0];
+      two_factor_auth = {
+        secret: row.secret,
+        enabled: !!row.enabled,
+        backupCodes: Array.isArray(row.backup_codes) ? row.backup_codes : (typeof row.backup_codes === 'string' ? JSON.parse(row.backup_codes) : []),
+        createdAt: row.created_at,
+        updatedAt: row.updated_at
+      };
+    }
+
+    const device_sessions: Record<string, any> = {};
+    for (const s of sessionRows) {
+      device_sessions[s.token] = {
+        token: s.token,
+        deviceId: s.device_id,
+        userAgent: s.user_agent,
+        createdAt: s.created_at,
+        lastUsedAt: s.last_used_at
+      };
+    }
+
+    const reconciled_periods = reconciledRows.map((p: any) => ({
+      userId: p.user_id,
+      bank: p.bank,
+      startDate: p.start_date,
+      endDate: p.end_date,
+      reconciledAt: p.reconciled_at
+    }));
+
+    const ignored_external_ids: Record<string, string[]> = {};
+    for (const ig of ignoredRows) {
+      if (!ignored_external_ids[ig.user_id]) {
+        ignored_external_ids[ig.user_id] = [];
+      }
+      ignored_external_ids[ig.user_id].push(ig.external_id);
+    }
+
+    const sync_logs = (syncLogsRes.data || []).map((l: any) => ({
+      id: l.id,
+      user_id: l.user_id,
+      status: l.status,
+      emails_processed: l.emails_processed,
+      transactions_found: l.transactions_found,
+      error_message: l.error_message,
+      created_at: l.created_at
+    }));
+
+    let oauth_config: any = undefined;
+    const oauthRow = configRows.find((c: any) => c.key === 'oauth_google');
+    if (oauthRow) {
+      oauth_config = typeof oauthRow.value === 'string' ? JSON.parse(oauthRow.value) : oauthRow.value;
+    }
+
+    console.log(`[SUPABASE] Sincronización exitosa: ${Object.keys(transactions).length} transacciones cargadas de Supabase.`);
+
+    return {
+      users,
+      transactions,
+      sync_logs,
+      reconciled_periods,
+      ignored_external_ids,
+      two_factor_auth,
+      device_sessions,
+      oauth_config
+    };
   },
 
   async upsertTransaction(tx: Transaction): Promise<void> {
     const client = getSupabaseClient();
     if (!client) return;
-    try {
-      const row = mapTransactionToRow(tx);
-      const { error } = await client.from('transactions').upsert(row);
-      if (error) console.error('[SUPABASE] Error al guardar transacción:', error.message);
-    } catch (err) {
-      console.error('[SUPABASE] Error upserting transaction:', err);
-    }
+    check(await client.from('transactions').upsert(mapTransactionToRow(tx)), 'Error al guardar transacción');
   },
 
   async deleteTransaction(id: string): Promise<void> {
     const client = getSupabaseClient();
     if (!client) return;
-    try {
-      const { error } = await client.from('transactions').delete().eq('id', id);
-      if (error) console.error('[SUPABASE] Error al eliminar transacción:', error.message);
-    } catch (err) {
-      console.error('[SUPABASE] Error deleting transaction:', err);
+    check(await client.from('transactions').delete().eq('id', id), 'Error al eliminar transacción');
+  },
+
+  async deleteTransactions(ids: string[]): Promise<void> {
+    const client = getSupabaseClient();
+    if (!client || ids.length === 0) return;
+    for (let i = 0; i < ids.length; i += 200) {
+      const chunk = ids.slice(i, i + 200);
+      check(await client.from('transactions').delete().in('id', chunk), 'Error al eliminar transacciones');
     }
   },
 
   async clearTransactions(userId: string): Promise<void> {
     const client = getSupabaseClient();
     if (!client) return;
-    try {
-      await Promise.all([
-        client.from('transactions').delete().eq('user_id', userId),
-        client.from('reconciled_periods').delete().eq('user_id', userId),
-        client.from('ignored_external_ids').delete().eq('user_id', userId),
-        client.from('sync_logs').delete().eq('user_id', userId)
-      ]);
-    } catch (err) {
-      console.error('[SUPABASE] Error clearing transactions:', err);
-    }
+    const results = await Promise.all([
+      client.from('transactions').delete().eq('user_id', userId),
+      client.from('reconciled_periods').delete().eq('user_id', userId),
+      client.from('ignored_external_ids').delete().eq('user_id', userId),
+      client.from('sync_logs').delete().eq('user_id', userId)
+    ]);
+    results.forEach(r => check(r, 'Error limpiando datos'));
   },
 
-  async saveTwoFactor(secret: string, backupCodes: string[], enabled = true): Promise<void> {
+  async saveTwoFactor(secret: string, backupCodes: string[], enabled = true, createdAt?: string): Promise<void> {
     const client = getSupabaseClient();
     if (!client) return;
-    try {
-      const now = new Date().toISOString();
-      const { error } = await client.from('two_factor_auth').upsert({
-        id: 'global_2fa',
-        secret,
-        enabled,
-        backup_codes: backupCodes,
-        created_at: now,
-        updated_at: now
-      });
-      if (error) console.error('[SUPABASE] Error al guardar 2FA:', error.message);
-    } catch (err) {
-      console.error('[SUPABASE] Error saving 2FA:', err);
-    }
+    const now = new Date().toISOString();
+    check(await client.from('two_factor_auth').upsert({
+      id: 'global_2fa',
+      secret,
+      enabled,
+      backup_codes: backupCodes,
+      created_at: createdAt || now,
+      updated_at: now
+    }), 'Error al guardar 2FA');
   },
 
   async disableTwoFactor(): Promise<void> {
     const client = getSupabaseClient();
     if (!client) return;
-    try {
-      const { error } = await client.from('two_factor_auth').update({
-        enabled: false,
-        updated_at: new Date().toISOString()
-      }).eq('id', 'global_2fa');
-      if (error) console.error('[SUPABASE] Error disabling 2FA:', error.message);
-    } catch (err) {
-      console.error('[SUPABASE] Error disabling 2FA:', err);
-    }
+    check(await client.from('two_factor_auth').update({
+      enabled: false,
+      updated_at: new Date().toISOString()
+    }).eq('id', 'global_2fa'), 'Error deshabilitando 2FA');
   },
 
   async resetTwoFactor(): Promise<void> {
     const client = getSupabaseClient();
     if (!client) return;
-    try {
-      await Promise.all([
-        client.from('two_factor_auth').delete().eq('id', 'global_2fa'),
-        client.from('device_sessions').delete().neq('token', 'EMPTY')
-      ]);
-    } catch (err) {
-      console.error('[SUPABASE] Error resetting 2FA in Supabase:', err);
-    }
+    check(await client.from('two_factor_auth').delete().eq('id', 'global_2fa'), 'Error reiniciando 2FA');
+    await this.deleteAllDeviceSessions();
   },
 
-  async saveDeviceSession(token: string, deviceId: string, userAgent?: string): Promise<void> {
+  async deleteAllDeviceSessions(): Promise<void> {
     const client = getSupabaseClient();
     if (!client) return;
-    try {
-      const now = new Date().toISOString();
-      await client.from('device_sessions').upsert({
-        token,
-        device_id: deviceId,
-        user_agent: userAgent || null,
-        created_at: now,
-        last_used_at: now
-      });
-    } catch (err) {
-      console.error('[SUPABASE] Error saving device session:', err);
-    }
+    check(await client.from('device_sessions').delete().neq('token', 'EMPTY'), 'Error eliminando sesiones');
+  },
+
+  async saveDeviceSession(token: string, deviceId: string, userAgent?: string, createdAt?: string, lastUsedAt?: string): Promise<void> {
+    const client = getSupabaseClient();
+    if (!client) return;
+    const now = new Date().toISOString();
+    check(await client.from('device_sessions').upsert({
+      token,
+      device_id: deviceId,
+      user_agent: userAgent || null,
+      created_at: createdAt || now,
+      last_used_at: lastUsedAt || now
+    }), 'Error guardando sesión de dispositivo');
   },
 
   async revokeDeviceSession(token: string): Promise<void> {
     const client = getSupabaseClient();
     if (!client) return;
-    try {
-      await client.from('device_sessions').delete().eq('token', token);
-    } catch (err) {
-      console.error('[SUPABASE] Error revoking device session:', err);
-    }
+    check(await client.from('device_sessions').delete().eq('token', token), 'Error revocando sesión');
   },
 
   async saveUser(user: any): Promise<void> {
     const client = getSupabaseClient();
     if (!client) return;
-    try {
-      await client.from('users').upsert({
-        id: user.id,
-        email: user.email,
-        name: user.name || null,
-        google_refresh_token: user.google_refresh_token || null,
-        google_access_token: user.google_access_token || null,
-        token_expiry: user.token_expiry || null,
-        created_at: user.created_at || new Date().toISOString(),
-        last_sync_at: user.last_sync_at || null
-      });
-    } catch (err) {
-      console.error('[SUPABASE] Error saving user in Supabase:', err);
-    }
+    check(await client.from('users').upsert({
+      id: user.id,
+      email: user.email,
+      name: user.name || null,
+      google_refresh_token: user.google_refresh_token || null,
+      google_access_token: user.google_access_token || null,
+      token_expiry: user.token_expiry || null,
+      created_at: user.created_at || new Date().toISOString(),
+      last_sync_at: user.last_sync_at || null
+    }), 'Error guardando usuario');
   },
 
   async saveSyncLog(log: any): Promise<void> {
     const client = getSupabaseClient();
     if (!client) return;
-    try {
-      await client.from('sync_logs').insert({
-        id: log.id,
-        user_id: log.user_id,
-        status: log.status,
-        emails_processed: log.emails_processed,
-        transactions_found: log.transactions_found,
-        error_message: log.error_message || null,
-        created_at: log.created_at
-      });
-    } catch (err) {
-      console.error('[SUPABASE] Error saving sync log in Supabase:', err);
-    }
+    check(await client.from('sync_logs').upsert({
+      id: log.id,
+      user_id: log.user_id,
+      status: log.status,
+      emails_processed: log.emails_processed,
+      transactions_found: log.transactions_found,
+      error_message: log.error_message || null,
+      created_at: log.created_at
+    }), 'Error guardando log de sincronización');
   },
 
   async saveReconciledPeriod(userId: string, bank: string, startDate: string, endDate: string, reconciledAt: string): Promise<void> {
     const client = getSupabaseClient();
     if (!client) return;
-    try {
-      const id = `${userId}_${bank}_${startDate}_${endDate}`;
-      await client.from('reconciled_periods').upsert({
-        id,
-        user_id: userId,
-        bank,
-        start_date: startDate,
-        end_date: endDate,
-        reconciled_at: reconciledAt
-      });
-    } catch (err) {
-      console.error('[SUPABASE] Error saving reconciled period in Supabase:', err);
-    }
+    const id = `${userId}_${bank}_${startDate}_${endDate}`;
+    check(await client.from('reconciled_periods').upsert({
+      id,
+      user_id: userId,
+      bank,
+      start_date: startDate,
+      end_date: endDate,
+      reconciled_at: reconciledAt
+    }), 'Error guardando periodo conciliado');
   },
 
   async saveIgnoredExternalId(userId: string, externalId: string): Promise<void> {
     const client = getSupabaseClient();
     if (!client) return;
-    try {
-      const id = `${userId}_${externalId}`;
-      await client.from('ignored_external_ids').upsert({
-        id,
-        user_id: userId,
-        external_id: externalId
-      });
-    } catch (err) {
-      console.error('[SUPABASE] Error saving ignored external ID in Supabase:', err);
-    }
+    const id = `${userId}_${externalId}`;
+    check(await client.from('ignored_external_ids').upsert({
+      id,
+      user_id: userId,
+      external_id: externalId
+    }), 'Error guardando ID ignorado');
   },
 
   async saveGoogleConfig(clientId: string, clientSecret: string, redirectUri?: string): Promise<void> {
     const client = getSupabaseClient();
     if (!client) return;
-    try {
-      await client.from('app_config').upsert({
-        key: 'oauth_google',
-        value: { clientId, clientSecret, redirectUri },
-        updated_at: new Date().toISOString()
-      });
-    } catch (err) {
-      console.error('[SUPABASE] Error saving google config in Supabase:', err);
-    }
+    check(await client.from('app_config').upsert({
+      key: 'oauth_google',
+      value: { clientId, clientSecret, redirectUri },
+      updated_at: new Date().toISOString()
+    }), 'Error guardando configuración de Google');
   }
 };

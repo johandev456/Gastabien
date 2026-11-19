@@ -111,3 +111,31 @@ ALTER TABLE reconciled_periods DISABLE ROW LEVEL SECURITY;
 ALTER TABLE ignored_external_ids DISABLE ROW LEVEL SECURITY;
 ALTER TABLE sync_logs DISABLE ROW LEVEL SECURITY;
 ALTER TABLE app_config DISABLE ROW LEVEL SECURITY;
+
+-- ==============================================================================
+-- MIGRACIÓN v2 (segura de re-ejecutar)
+-- ==============================================================================
+
+-- Marca las categorías editadas manualmente para que no se re-categoricen al reiniciar
+ALTER TABLE transactions ADD COLUMN IF NOT EXISTS category_overridden BOOLEAN DEFAULT FALSE;
+
+-- Índice para búsquedas por ID externo (correo de Gmail)
+CREATE INDEX IF NOT EXISTS idx_transactions_user_external ON transactions (user_id, external_id);
+
+-- ==============================================================================
+-- SEGURIDAD (RECOMENDADO): Activar Row Level Security
+-- ------------------------------------------------------------------------------
+-- IMPORTANTE: Ejecuta este bloque SOLO después de configurar en Render la variable
+-- SUPABASE_SERVICE_ROLE_KEY (o SUPABASE_KEY) con la clave "service_role" de tu
+-- proyecto. La clave "anon" es pública: con RLS desactivado cualquiera que la tenga
+-- puede leer tus transacciones, el secreto 2FA y los tokens de sesión.
+-- Con RLS activado y sin políticas, solo la clave service_role (backend) tiene acceso.
+-- ==============================================================================
+-- ALTER TABLE users ENABLE ROW LEVEL SECURITY;
+-- ALTER TABLE transactions ENABLE ROW LEVEL SECURITY;
+-- ALTER TABLE two_factor_auth ENABLE ROW LEVEL SECURITY;
+-- ALTER TABLE device_sessions ENABLE ROW LEVEL SECURITY;
+-- ALTER TABLE reconciled_periods ENABLE ROW LEVEL SECURITY;
+-- ALTER TABLE ignored_external_ids ENABLE ROW LEVEL SECURITY;
+-- ALTER TABLE sync_logs ENABLE ROW LEVEL SECURITY;
+-- ALTER TABLE app_config ENABLE ROW LEVEL SECURITY;

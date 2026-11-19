@@ -9,7 +9,8 @@ export function require2FA(req: Request, res: Response, next: NextFunction) {
     userAgent.includes('okhttp') ||
     userAgent.includes('dalvik');
 
-  // Allow native mobile app requests
+  // Allow native mobile app requests.
+  // NOTE: intentionally kept as-is by the owner's decision; these headers can be spoofed.
   if (isAndroidClient) {
     return next();
   }
@@ -24,7 +25,7 @@ export function require2FA(req: Request, res: Response, next: NextFunction) {
     });
   }
 
-  // Extract token from Authorization header or custom header or query
+  // Extract token from Authorization header or custom header (never from the query string)
   const authHeader = req.headers.authorization;
   let token: string | undefined;
 
@@ -32,8 +33,6 @@ export function require2FA(req: Request, res: Response, next: NextFunction) {
     token = authHeader.substring(7).trim();
   } else if (req.headers['x-device-token']) {
     token = (req.headers['x-device-token'] as string).trim();
-  } else if (req.query.device_token) {
-    token = (req.query.device_token as string).trim();
   }
 
   if (token && dbOps.validateDeviceSession(token)) {

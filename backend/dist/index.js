@@ -24,7 +24,7 @@ app.use((0, cors_1.default)({
     allowedHeaders: ['Content-Type', 'Authorization', 'x-user-id', 'x-device-token', 'x-client-platform', 'Bypass-Tunnel-Reminder', 'bypass-tunnel-reminder', '*']
 }));
 app.options('*', (0, cors_1.default)());
-app.use(express_1.default.json());
+app.use(express_1.default.json({ limit: '5mb' }));
 // Initialize Database and Start Server
 async function startServer() {
     try {

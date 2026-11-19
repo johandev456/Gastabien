@@ -5,19 +5,41 @@ import { dbOps } from '../database/db';
 import { RawEmailData, Transaction } from '../types';
 
 export class SyncService {
-  public async syncUserGmail(userId: string): Promise<{
+  private syncInProgress = new Set<string>();
+
+  /**
+   * @param options.full  When true, scans the whole mailbox (used by re-sync);
+   *                      otherwise only emails since the last successful sync.
+   */
+  public async syncUserGmail(userId: string, options: { full?: boolean } = {}): Promise<{
     status: 'SUCCESS' | 'FAILED';
     emailsProcessed: number;
     newTransactionsCount: number;
     transactions: Transaction[];
     error?: string;
   }> {
+    if (this.syncInProgress.has(userId)) {
+      return {
+        status: 'FAILED',
+        emailsProcessed: 0,
+        newTransactionsCount: 0,
+        transactions: [],
+        error: 'Ya hay una sincronización en curso. Espera a que termine.'
+      };
+    }
+    this.syncInProgress.add(userId);
+
+    let emailsProcessed = 0;
+    let newCount = 0;
+    const createdList: Transaction[] = [];
     try {
-      const emails = await gmailService.fetchBankEmails(userId, 40);
-      let newCount = 0;
+      const user = dbOps.getUser(userId);
+      const since = !options.full && user?.last_sync_at ? new Date(user.last_sync_at) : undefined;
+      const emails = await gmailService.fetchBankEmails(userId, { since });
       const createdList: Transaction[] = [];
 
       for (const email of emails) {
+        emailsProcessed++;
         const parsed = bankParserFactory.parseEmail(email);
         if (!parsed) continue;
 
@@ -49,24 +71,26 @@ export class SyncService {
       }
 
       dbOps.updateUserLastSync(userId);
-      dbOps.logSync(userId, 'SUCCESS', emails.length, newCount);
+      dbOps.logSync(userId, 'SUCCESS', emailsProcessed, newCount);
 
       return {
         status: 'SUCCESS',
-        emailsProcessed: emails.length,
+        emailsProcessed,
         newTransactionsCount: newCount,
         transactions: createdList
       };
     } catch (err: any) {
       console.error(`Sync error for user ${userId}:`, err);
-      dbOps.logSync(userId, 'FAILED', 0, 0, err.message || 'Error desconocido');
+      dbOps.logSync(userId, 'FAILED', emailsProcessed, newCount, err.message || 'Error desconocido');
       return {
         status: 'FAILED',
-        emailsProcessed: 0,
-        newTransactionsCount: 0,
-        transactions: [],
+        emailsProcessed,
+        newTransactionsCount: newCount,
+        transactions: createdList,
         error: err.message || 'Error al sincronizar con Gmail'
       };
+    } finally {
+      this.syncInProgress.delete(userId);
     }
   }
 

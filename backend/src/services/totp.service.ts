@@ -84,7 +84,7 @@ export class TotpService {
    * Verifies a 6-digit TOTP token with ±1 window tolerance (±30s)
    */
   public verifyToken(secret: string, token: string, window = 1): boolean {
-    if (!token || token.trim().length !== 6) {
+    if (!token || !/^\d{6}$/.test(token.trim())) {
       return false;
     }
     const cleanToken = token.trim();

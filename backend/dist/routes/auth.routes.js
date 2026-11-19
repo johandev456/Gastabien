@@ -33,6 +33,7 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.getRequestToken = getRequestToken;
 const express_1 = require("express");
 const gmail_service_1 = require("../services/gmail.service");
 const db_1 = require("../database/db");
@@ -41,23 +42,74 @@ const totp_service_1 = require("../services/totp.service");
 const router = (0, express_1.Router)();
 // In-memory holder for pending 2FA setup until verified
 let pendingSetup = null;
+const PENDING_SETUP_TTL_MS = 10 * 60 * 1000;
+function getPendingSetup() {
+    if (pendingSetup && Date.now() - pendingSetup.createdAt > PENDING_SETUP_TTL_MS) {
+        pendingSetup = null;
+    }
+    return pendingSetup;
+}
+/** Session token from headers only (never from the query string: it would leak into logs). */
+function getRequestToken(req) {
+    const authHeader = req.headers.authorization;
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+        return authHeader.substring(7).trim() || undefined;
+    }
+    if (req.headers['x-device-token']) {
+        return req.headers['x-device-token'].trim() || undefined;
+    }
+    return undefined;
+}
+function hasValidSession(req) {
+    const token = getRequestToken(req);
+    return !!token && db_1.dbOps.validateDeviceSession(token);
+}
+/** Sensitive config changes require an authorized session whenever 2FA is active. */
+function canChangeConfig(req) {
+    const twoFactor = db_1.dbOps.getTwoFactorAuth();
+    if (!twoFactor || !twoFactor.enabled)
+        return true;
+    return hasValidSession(req);
+}
+// ---- Simple in-memory brute-force protection for code verification ----
+const MAX_FAILED_ATTEMPTS = 5;
+const ATTEMPT_WINDOW_MS = 5 * 60 * 1000;
+const failedAttempts = new Map();
+function clientKey(req) {
+    const fwd = req.headers['x-forwarded-for']?.split(',')[0]?.trim();
+    return fwd || req.ip || 'unknown';
+}
+function isRateLimited(req) {
+    const entry = failedAttempts.get(clientKey(req));
+    if (!entry)
+        return 0;
+    const elapsed = Date.now() - entry.firstAt;
+    if (elapsed > ATTEMPT_WINDOW_MS) {
+        failedAttempts.delete(clientKey(req));
+        return 0;
+    }
+    return entry.count >= MAX_FAILED_ATTEMPTS ? Math.ceil((ATTEMPT_WINDOW_MS - elapsed) / 1000) : 0;
+}
+function registerFailure(req) {
+    const key = clientKey(req);
+    const entry = failedAttempts.get(key);
+    if (!entry || Date.now() - entry.firstAt > ATTEMPT_WINDOW_MS) {
+        failedAttempts.set(key, { count: 1, firstAt: Date.now() });
+    }
+    else {
+        entry.count++;
+    }
+}
+function clearFailures(req) {
+    failedAttempts.delete(clientKey(req));
+}
 // ==========================================
 // 2FA TWO-FACTOR AUTHENTICATION ENDPOINTS
 // ==========================================
 // Get 2FA Status & Device Session validity
 router.get('/2fa/status', (req, res) => {
     const twoFactor = db_1.dbOps.getTwoFactorAuth();
-    const authHeader = req.headers.authorization;
-    let token;
-    if (authHeader && authHeader.startsWith('Bearer ')) {
-        token = authHeader.substring(7).trim();
-    }
-    else if (req.headers['x-device-token']) {
-        token = req.headers['x-device-token'].trim();
-    }
-    else if (req.query.token) {
-        token = req.query.token.trim();
-    }
+    const token = getRequestToken(req);
     const is2FAEnabled = !!(twoFactor && twoFactor.enabled);
     const isAuthenticated = is2FAEnabled && !!token && db_1.dbOps.validateDeviceSession(token);
     const requiresSetup = !is2FAEnabled;
@@ -72,17 +124,9 @@ router.get('/2fa/status', (req, res) => {
 router.post('/2fa/setup', (req, res) => {
     try {
         const existing = db_1.dbOps.getTwoFactorAuth();
-        const authHeader = req.headers.authorization;
-        let token;
-        if (authHeader && authHeader.startsWith('Bearer ')) {
-            token = authHeader.substring(7).trim();
-        }
-        else if (req.headers['x-device-token']) {
-            token = req.headers['x-device-token'].trim();
-        }
         if (existing && existing.enabled) {
             // If already enabled, only an already authenticated device can request setup/reconfiguration
-            if (!token || !db_1.dbOps.validateDeviceSession(token)) {
+            if (!hasValidSession(req)) {
                 return res.status(403).json({
                     success: false,
                     error: '2FA_ALREADY_CONFIGURED',
@@ -122,20 +166,38 @@ router.post('/2fa/verify', (req, res) => {
     if (!code || typeof code !== 'string') {
         return res.status(400).json({ success: false, error: 'Código 2FA requerido' });
     }
+    const retryAfter = isRateLimited(req);
+    if (retryAfter > 0) {
+        res.setHeader('Retry-After', String(retryAfter));
+        return res.status(429).json({
+            success: false,
+            error: `Demasiados intentos fallidos. Espera ${Math.ceil(retryAfter / 60)} minuto(s) e inténtalo de nuevo.`
+        });
+    }
     const cleanCode = code.trim().replace(/\s+/g, '');
     const existing2FA = db_1.dbOps.getTwoFactorAuth();
-    // If in setup mode
-    if (isSetup || !existing2FA || !existing2FA.enabled) {
-        const secretToVerify = pendingSetup?.secret || req.body.secret;
-        if (!secretToVerify) {
-            return res.status(400).json({ success: false, error: 'No hay configuración 2FA pendiente. Inicia el setup primero.' });
+    const is2FAEnabled = !!(existing2FA && existing2FA.enabled);
+    // Setup mode: only when 2FA is not active yet, or when an ALREADY AUTHORIZED device
+    // is re-configuring. The secret always comes from the server-side pending setup,
+    // never from the request body.
+    const setupMode = !is2FAEnabled || (isSetup === true && hasValidSession(req));
+    if (setupMode) {
+        const pending = getPendingSetup();
+        if (!pending) {
+            return res.status(400).json({ success: false, error: 'No hay configuración 2FA pendiente o expiró. Inicia el setup de nuevo.' });
         }
-        const isValid = totp_service_1.totpService.verifyToken(secretToVerify, cleanCode, 2);
+        const isValid = totp_service_1.totpService.verifyToken(pending.secret, cleanCode, 1);
         if (!isValid) {
+            registerFailure(req);
             return res.status(400).json({ success: false, error: 'Código 2FA incorrecto. Verifica el reloj de tu dispositivo o reintenta.' });
         }
-        // Save and activate 2FA permanently
-        const backupCodes = pendingSetup?.backupCodes || totp_service_1.totpService.generateBackupCodes(8);
+        clearFailures(req);
+        // Save and activate 2FA permanently (re-configuration revokes all other devices)
+        const secretToVerify = pending.secret;
+        const backupCodes = pending.backupCodes;
+        if (is2FAEnabled) {
+            db_1.dbOps.revokeAllDeviceSessions();
+        }
         db_1.dbOps.saveTwoFactorAuth(secretToVerify, backupCodes, true);
         pendingSetup = null;
         // Issue persistent device session token
@@ -153,7 +215,7 @@ router.post('/2fa/verify', (req, res) => {
     // Check if it's a 6-digit TOTP
     let isValid = false;
     if (cleanCode.length === 6 && /^\d+$/.test(cleanCode)) {
-        isValid = totp_service_1.totpService.verifyToken(existing2FA.secret, cleanCode, 2);
+        isValid = totp_service_1.totpService.verifyToken(existing2FA.secret, cleanCode, 1);
     }
     // Check if it's a backup code (e.g. XXXX-XXXX)
     if (!isValid && cleanCode.length >= 8) {
@@ -163,8 +225,10 @@ router.post('/2fa/verify', (req, res) => {
         }
     }
     if (!isValid) {
+        registerFailure(req);
         return res.status(400).json({ success: false, error: 'Código 2FA inválido o expirado. Revisa tu aplicación de autenticación.' });
     }
+    clearFailures(req);
     // Issue persistent device session token
     const token = totp_service_1.totpService.generateDeviceToken();
     const userAgent = req.headers['user-agent'];
@@ -176,7 +240,25 @@ router.post('/2fa/verify', (req, res) => {
     });
 });
 // Reset / Reconfigure 2FA from scratch
+// Requires an authorized session, or a valid backup code when the device is locked out.
 router.post('/2fa/reset', (req, res) => {
+    const twoFactor = db_1.dbOps.getTwoFactorAuth();
+    if (twoFactor && twoFactor.enabled && !hasValidSession(req)) {
+        const retryAfter = isRateLimited(req);
+        if (retryAfter > 0) {
+            res.setHeader('Retry-After', String(retryAfter));
+            return res.status(429).json({ success: false, error: 'Demasiados intentos fallidos. Espera unos minutos.' });
+        }
+        const backupCode = typeof req.body?.backupCode === 'string' ? req.body.backupCode.trim() : '';
+        if (!backupCode || !db_1.dbOps.verifyAndConsumeBackupCode(backupCode)) {
+            registerFailure(req);
+            return res.status(401).json({
+                success: false,
+                error: 'Para reiniciar el 2FA necesitas una sesión autorizada o un código de respaldo válido.'
+            });
+        }
+        clearFailures(req);
+    }
     db_1.dbOps.resetTwoFactorAuth();
     pendingSetup = null;
     return res.json({
@@ -186,17 +268,7 @@ router.post('/2fa/reset', (req, res) => {
 });
 // Logout / Revoke device session
 router.post('/2fa/logout', (req, res) => {
-    const authHeader = req.headers.authorization;
-    let token;
-    if (authHeader && authHeader.startsWith('Bearer ')) {
-        token = authHeader.substring(7).trim();
-    }
-    else if (req.headers['x-device-token']) {
-        token = req.headers['x-device-token'].trim();
-    }
-    else if (req.body.token) {
-        token = req.body.token;
-    }
+    const token = getRequestToken(req) || (typeof req.body?.token === 'string' ? req.body.token : undefined);
     if (token) {
         db_1.dbOps.revokeDeviceSession(token);
     }
@@ -232,6 +304,9 @@ router.get('/google/url', (req, res) => {
 });
 // Save / Update Google OAuth credentials dynamically
 router.post('/google/config', (req, res) => {
+    if (!canChangeConfig(req)) {
+        return res.status(401).json({ error: '2FA_REQUIRED', message: 'Se requiere una sesión autorizada para cambiar la configuración.' });
+    }
     const { clientId, clientSecret } = req.body;
     if (!clientId || !clientSecret) {
         return res.status(400).json({ error: 'Client ID y Client Secret son requeridos' });
@@ -281,6 +356,9 @@ router.get('/supabase/status', async (req, res) => {
 });
 // Configure Supabase dynamically
 router.post('/supabase/config', async (req, res) => {
+    if (!canChangeConfig(req)) {
+        return res.status(401).json({ success: false, error: '2FA_REQUIRED', message: 'Se requiere una sesión autorizada para cambiar la configuración.' });
+    }
     const { url, key } = req.body;
     if (!url || !key) {
         return res.status(400).json({ success: false, error: 'URL y KEY de Supabase son requeridos.' });
@@ -302,20 +380,23 @@ router.post('/supabase/config', async (req, res) => {
 router.get('/status', (req, res) => {
     const userId = req.headers['x-user-id'] || req.query.userId || 'demo-user-id';
     const user = db_1.dbOps.getUser(userId);
+    const hasGoogleAuth = !!(config_1.CONFIG.GOOGLE.CLIENT_ID && config_1.CONFIG.GOOGLE.CLIENT_SECRET);
     if (!user) {
         return res.json({
             connected: false,
             user: null,
-            hasGoogleAuth: false
+            hasGoogleAuth
         });
     }
     return res.json({
         connected: true,
+        hasGoogleAuth,
         user: {
             id: user.id,
             email: user.email,
             name: user.name,
             lastSyncAt: user.last_sync_at,
+            needsReconnect: !!user.needs_reconnect,
             hasGmailConnected: !!(user.google_refresh_token || user.google_access_token)
         }
     });

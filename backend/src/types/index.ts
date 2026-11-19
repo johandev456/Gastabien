@@ -52,6 +52,8 @@ export interface Transaction extends ParsedTransaction {
   confidenceScore?: number;
   notes?: string;
   isManual?: boolean;
+  /** True when the user manually changed the category (auto re-categorization must skip it). */
+  categoryOverridden?: boolean;
   createdAt: string;
   updatedAt: string;
 }
