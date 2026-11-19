@@ -58,7 +58,7 @@ export class GmailService {
    * - `since` narrows the query with Gmail's `after:` operator (1 day overlap for safety).
    * - Persists refreshed OAuth tokens and flags the user when Google revokes access.
    */
-  public async fetchBankEmails(userId: string, options: { maxResults?: number; since?: Date } = {}): Promise<RawEmailData[]> {
+  public async fetchBankEmails(userId: string, options: { maxResults?: number; since?: Date } = {}): Promise<{ emails: RawEmailData[]; failedCount: number }> {
     const maxResults = options.maxResults ?? 500;
     const user = dbOps.getUser(userId);
     if (!user || (!user.google_refresh_token && !user.google_access_token)) {
@@ -106,14 +106,19 @@ export class GmailService {
     }
 
     const results: RawEmailData[] = [];
+    let failedCount = 0;
     const CONCURRENCY = 5;
     for (let i = 0; i < messages.length; i += CONCURRENCY) {
-      const batch = messages.slice(i, i + CONCURRENCY);
+      const batch = messages.slice(i, i + CONCURRENCY).filter(msg => !!msg.id);
       const fetched = await Promise.all(batch.map(msg => this.fetchMessage(gmail, msg)));
-      for (const email of fetched) if (email) results.push(email);
+      for (const email of fetched) {
+        if (email) results.push(email);
+        else failedCount++;
+      }
     }
 
-    return results;
+    // Callers must not advance the sync cursor when some messages could not be downloaded
+    return { emails: results, failedCount };
   }
 
   private isAuthRevoked(err: any): boolean {

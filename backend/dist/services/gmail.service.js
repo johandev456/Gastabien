@@ -91,15 +91,20 @@ class GmailService {
             throw err;
         }
         const results = [];
+        let failedCount = 0;
         const CONCURRENCY = 5;
         for (let i = 0; i < messages.length; i += CONCURRENCY) {
-            const batch = messages.slice(i, i + CONCURRENCY);
+            const batch = messages.slice(i, i + CONCURRENCY).filter(msg => !!msg.id);
             const fetched = await Promise.all(batch.map(msg => this.fetchMessage(gmail, msg)));
-            for (const email of fetched)
+            for (const email of fetched) {
                 if (email)
                     results.push(email);
+                else
+                    failedCount++;
+            }
         }
-        return results;
+        // Callers must not advance the sync cursor when some messages could not be downloaded
+        return { emails: results, failedCount };
     }
     isAuthRevoked(err) {
         const msg = `${err?.message || ''} ${err?.response?.data?.error || ''}`.toLowerCase();

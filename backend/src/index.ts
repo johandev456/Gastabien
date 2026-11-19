@@ -14,6 +14,9 @@ import { syncService } from './services/sync.service';
 import { require2FA } from './middleware/auth.middleware';
 
 const app = express();
+// Behind Render's proxy: trust exactly one hop so req.ip is the real client address
+// (a client-supplied X-Forwarded-For value cannot override it).
+app.set('trust proxy', 1);
 
 // Middleware
 app.use(cors({

@@ -113,6 +113,20 @@ class CategorizationService {
     normalize(text) {
         return text.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
     }
+    matchWholeWord(text) {
+        if (!text)
+            return null;
+        for (const rule of this.rules) {
+            for (const keyword of rule.keywords) {
+                if (this.matchesKeyword(text, keyword))
+                    return rule.category;
+            }
+        }
+        return null;
+    }
+    compact(text) {
+        return this.normalize(text).replace(/[^a-z0-9]/g, '');
+    }
     /** Whole-word match ("bar" matches "Sports Bar" but not "Barbería" or "Bravo"). */
     matchesKeyword(text, keyword) {
         let re = this.keywordPatterns.get(keyword);
@@ -127,18 +141,32 @@ class CategorizationService {
         if (type === 'INCOME') {
             return 'Ingresos y Nómina';
         }
-        // The merchant is the strongest signal: check it against every rule before looking at the
-        // free-text description (which contains noise like "Club Promerica" or "tarjeta").
-        const sources = [merchant || '', description || ''].map(t => this.normalize(t)).filter(Boolean);
-        for (const text of sources) {
+        // Order of evidence, strongest first:
+        //  1. whole-word keyword in the merchant name
+        //  2. glued merchant tokens ("SMBRAVO", "FARMACIACAROL"): separators removed, 5+ letter keywords only,
+        //     so short words like "bar", "club" or "bon" can't match by accident
+        //  3. whole-word keyword in the free-text description (noisy: "Club Promerica", "tarjeta"...)
+        const merchantText = this.normalize(merchant || '');
+        const byMerchant = this.matchWholeWord(merchantText);
+        if (byMerchant)
+            return byMerchant;
+        const compactMerchant = this.compact(merchant || '');
+        if (compactMerchant) {
             for (const rule of this.rules) {
                 for (const keyword of rule.keywords) {
-                    if (this.matchesKeyword(text, keyword)) {
+                    const k = this.compact(keyword);
+                    if (k.length >= 5 && compactMerchant.includes(k)) {
                         return rule.category;
                     }
                 }
             }
         }
+        // Bank product names in email boilerplate are not merchant signals ("tarjeta Club Promerica")
+        const descriptionText = this.normalize(description || '')
+            .replace(/\b(?:club\s+promerica|promerica\s+club|club\s+de\s+beneficios|tarjetas?\s+(?:de\s+)?credito)\b/g, ' ');
+        const byDescription = this.matchWholeWord(descriptionText);
+        if (byDescription)
+            return byDescription;
         return 'Otros Gastos';
     }
 }

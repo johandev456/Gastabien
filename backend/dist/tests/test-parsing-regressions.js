@@ -4,6 +4,7 @@ const parser_factory_1 = require("../parsers/parser.factory");
 const base_parser_1 = require("../parsers/base.parser");
 const date_1 = require("../utils/date");
 const statement_service_1 = require("../services/statement.service");
+const categorization_service_1 = require("../services/categorization.service");
 let failed = 0;
 function check(name, ok, detail = '') {
     console.log(`${ok ? '✅ [PASSED]' : '❌ [FAILED]'} ${name}${detail ? ' — ' + detail : ''}`);
@@ -60,6 +61,26 @@ check('Hora DR convertida a UTC', p?.date === '2026-02-01T01:15:00.000Z', String
 // --- Invalid dates fall back to email date ---
 p = parser_factory_1.bankParserFactory.parseEmail(email({ bodyText: 'Compra aprobada por RD$ 500.00 en COLMADO el 31/02/2026.' }));
 check('Fecha inválida 31/02 usa fecha del correo', p?.date === '2026-03-10T15:00:00.000Z', String(p?.date));
+// --- Payroll email mentioning "cargo de" must stay INCOME ---
+p = parser_factory_1.bankParserFactory.parseEmail(email({
+    from: 'notificaciones@promerica.com.do',
+    subject: 'Notificación de Transacción Banco Promerica',
+    bodyText: 'Abono de nómina por RD$ 48,500.00 acreditado a su cuenta, sin cargo de comisión.'
+}));
+check('Nómina con "sin cargo de comisión" = INCOME', p?.type === 'INCOME', `${p?.type} ${p?.amount}`);
+// --- Categorization ---
+const promoDesc = 'Estimado cliente, transacción con su tarjeta Club Promerica';
+const cats = [
+    ['NETFLIX.COM', 'Entretenimiento y Suscripciones'],
+    ['SMBRAVO CHURCHILL', 'Supermercados'],
+    ['FARMACIACAROL', 'Salud y Farmacias'],
+    ['Barberia Juan', 'Otros Gastos'],
+    ['The Irish Pub', 'Bares y Vida Nocturna']
+];
+for (const [merchant, expected] of cats) {
+    const got = categorization_service_1.categorizationService.categorize(merchant, promoDesc, 'EXPENSE');
+    check(`Categoría "${merchant}"`, got === expected, got);
+}
 // --- Statements ---
 const semicolonCsv = `Fecha;Descripción;Débito;Crédito;Balance
 05/09/2026;COMPRA POS SM BRAVO, CHURCHILL;1.234,56;;10.000,00

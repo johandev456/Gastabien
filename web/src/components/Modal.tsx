@@ -40,10 +40,12 @@ export const Modal: React.FC<ModalProps> = ({
     const previouslyFocused = document.activeElement as HTMLElement | null;
     const dialog = dialogRef.current;
 
-    // Focus the first form field (or the dialog itself)
+    // Move focus into the dialog, unless a child already took it (React's `autoFocus` focuses
+    // its element on mount but does not render an `autofocus` attribute we could query).
     const focusTimer = window.setTimeout(() => {
+      if (dialog && dialog.contains(document.activeElement)) return;
       const target =
-        dialog?.querySelector<HTMLElement>('[autofocus], input:not([type=hidden]), select, textarea') || dialog;
+        dialog?.querySelector<HTMLElement>('[data-autofocus], input:not([type=hidden]), select, textarea') || dialog;
       target?.focus();
     }, 0);
 

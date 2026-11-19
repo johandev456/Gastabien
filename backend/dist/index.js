@@ -17,6 +17,9 @@ const banks_routes_1 = __importDefault(require("./routes/banks.routes"));
 const statement_routes_1 = __importDefault(require("./routes/statement.routes"));
 const auth_middleware_1 = require("./middleware/auth.middleware");
 const app = (0, express_1.default)();
+// Behind Render's proxy: trust exactly one hop so req.ip is the real client address
+// (a client-supplied X-Forwarded-For value cannot override it).
+app.set('trust proxy', 1);
 // Middleware
 app.use((0, cors_1.default)({
     origin: '*',

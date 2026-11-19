@@ -142,9 +142,12 @@ function installFlushHandlers() {
 let cloudChain: Promise<void> = Promise.resolve();
 let cloudPending = 0;
 let cloudFailures = 0;
+/** Set when the boot-time Supabase load failed: the local store may be stale, so it must not
+ *  overwrite the cloud copy (that would resurrect rows deleted there). Cleared on restart. */
+let cloudWritesDisabled = false;
 
 function cloud(label: string, op: () => Promise<void>) {
-  if (!isSupabaseConfigured()) return;
+  if (cloudWritesDisabled || !isSupabaseConfigured()) return;
   cloudPending++;
   cloudChain = cloudChain.then(async () => {
     const delays = [0, 1000, 3000, 8000];
@@ -169,7 +172,7 @@ export function waitForCloudWrites(): Promise<void> {
 }
 
 export function getCloudSyncStatus() {
-  return { pending: cloudPending, failures: cloudFailures, configured: isSupabaseConfigured() };
+  return { pending: cloudPending, failures: cloudFailures, configured: isSupabaseConfigured(), writesDisabled: cloudWritesDisabled };
 }
 
 export async function initDatabase() {
@@ -191,6 +194,7 @@ export async function initDatabase() {
       }
     } catch (err) {
       supabaseFailed = true;
+      cloudWritesDisabled = true;
       console.error('[DATABASE] ⚠️ Error conectando a Supabase Cloud. Se usará el almacenamiento local y NO se re-sembrará la nube:', err);
     }
   }
@@ -349,7 +353,7 @@ export const dbOps = {
       existing.google_refresh_token = user.refresh_token || existing.google_refresh_token;
       existing.google_access_token = user.access_token || existing.google_access_token;
       existing.token_expiry = user.token_expiry || existing.token_expiry;
-      existing.last_sync_at = now;
+      // Connecting Gmail is not a sync: keep last_sync_at so the next sync scans what's missing
       existing.needs_reconnect = false;
       id = existing.id;
       saveDatabase();
@@ -365,7 +369,8 @@ export const dbOps = {
         google_access_token: user.access_token,
         token_expiry: user.token_expiry,
         created_at: now,
-        last_sync_at: now
+        // undefined => the first sync scans the whole mailbox
+        last_sync_at: undefined as string | undefined
       };
       memoryDb.users[id] = newUser;
       saveDatabase();

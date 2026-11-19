@@ -11,12 +11,21 @@ export class SyncService {
    * @param options.full  When true, scans the whole mailbox (used by re-sync);
    *                      otherwise only emails since the last successful sync.
    */
-  public async syncUserGmail(userId: string, options: { full?: boolean } = {}): Promise<{
+  public isSyncing(userId: string): boolean {
+    return this.syncInProgress.has(userId);
+  }
+
+  /**
+   * @param options.clearEmailTransactions  Re-sync: remove Gmail-sourced transactions first.
+   *        Done here, under the per-user lock, so it can never run while another sync is active.
+   */
+  public async syncUserGmail(userId: string, options: { full?: boolean; clearEmailTransactions?: boolean } = {}): Promise<{
     status: 'SUCCESS' | 'FAILED';
     emailsProcessed: number;
     newTransactionsCount: number;
     transactions: Transaction[];
     error?: string;
+    removedCount?: number;
   }> {
     if (this.syncInProgress.has(userId)) {
       return {
@@ -31,12 +40,15 @@ export class SyncService {
 
     let emailsProcessed = 0;
     let newCount = 0;
+    let removedCount: number | undefined;
     const createdList: Transaction[] = [];
     try {
+      if (options.clearEmailTransactions) {
+        removedCount = await dbOps.clearEmailTransactions(userId);
+      }
       const user = dbOps.getUser(userId);
       const since = !options.full && user?.last_sync_at ? new Date(user.last_sync_at) : undefined;
-      const emails = await gmailService.fetchBankEmails(userId, { since });
-      const createdList: Transaction[] = [];
+      const { emails, failedCount } = await gmailService.fetchBankEmails(userId, { since });
 
       for (const email of emails) {
         emailsProcessed++;
@@ -70,13 +82,24 @@ export class SyncService {
         newCount++;
       }
 
-      dbOps.updateUserLastSync(userId);
-      dbOps.logSync(userId, 'SUCCESS', emailsProcessed, newCount);
+      // Only advance the incremental cursor when every message was downloaded; otherwise the
+      // next sync re-scans the same window and picks up the ones that failed.
+      if (failedCount === 0) {
+        dbOps.updateUserLastSync(userId);
+      }
+      dbOps.logSync(
+        userId,
+        'SUCCESS',
+        emailsProcessed,
+        newCount,
+        failedCount > 0 ? `${failedCount} correos no se pudieron descargar; se reintentarán` : undefined
+      );
 
       return {
         status: 'SUCCESS',
         emailsProcessed,
         newTransactionsCount: newCount,
+        removedCount,
         transactions: createdList
       };
     } catch (err: any) {

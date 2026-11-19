@@ -84,8 +84,11 @@ function installFlushHandlers() {
 let cloudChain = Promise.resolve();
 let cloudPending = 0;
 let cloudFailures = 0;
+/** Set when the boot-time Supabase load failed: the local store may be stale, so it must not
+ *  overwrite the cloud copy (that would resurrect rows deleted there). Cleared on restart. */
+let cloudWritesDisabled = false;
 function cloud(label, op) {
-    if (!(0, supabase_1.isSupabaseConfigured)())
+    if (cloudWritesDisabled || !(0, supabase_1.isSupabaseConfigured)())
         return;
     cloudPending++;
     cloudChain = cloudChain.then(async () => {
@@ -111,7 +114,7 @@ function waitForCloudWrites() {
     return cloudChain;
 }
 function getCloudSyncStatus() {
-    return { pending: cloudPending, failures: cloudFailures, configured: (0, supabase_1.isSupabaseConfigured)() };
+    return { pending: cloudPending, failures: cloudFailures, configured: (0, supabase_1.isSupabaseConfigured)(), writesDisabled: cloudWritesDisabled };
 }
 async function initDatabase() {
     installFlushHandlers();
@@ -133,6 +136,7 @@ async function initDatabase() {
         }
         catch (err) {
             supabaseFailed = true;
+            cloudWritesDisabled = true;
             console.error('[DATABASE] ⚠️ Error conectando a Supabase Cloud. Se usará el almacenamiento local y NO se re-sembrará la nube:', err);
         }
     }
@@ -279,7 +283,7 @@ exports.dbOps = {
             existing.google_refresh_token = user.refresh_token || existing.google_refresh_token;
             existing.google_access_token = user.access_token || existing.google_access_token;
             existing.token_expiry = user.token_expiry || existing.token_expiry;
-            existing.last_sync_at = now;
+            // Connecting Gmail is not a sync: keep last_sync_at so the next sync scans what's missing
             existing.needs_reconnect = false;
             id = existing.id;
             saveDatabase();
@@ -296,7 +300,8 @@ exports.dbOps = {
                 google_access_token: user.access_token,
                 token_expiry: user.token_expiry,
                 created_at: now,
-                last_sync_at: now
+                // undefined => the first sync scans the whole mailbox
+                last_sync_at: undefined
             };
             memoryDb.users[id] = newUser;
             saveDatabase();

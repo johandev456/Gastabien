@@ -3,6 +3,7 @@ import { BaseBankParser } from '../parsers/base.parser';
 import { drMonthKey } from '../utils/date';
 import { RawEmailData } from '../types';
 import { statementService } from '../services/statement.service';
+import { categorizationService } from '../services/categorization.service';
 
 let failed = 0;
 function check(name: string, ok: boolean, detail = '') {
@@ -68,6 +69,28 @@ check('Hora DR convertida a UTC', p?.date === '2026-02-01T01:15:00.000Z', String
 // --- Invalid dates fall back to email date ---
 p = bankParserFactory.parseEmail(email({ bodyText: 'Compra aprobada por RD$ 500.00 en COLMADO el 31/02/2026.' }));
 check('Fecha inválida 31/02 usa fecha del correo', p?.date === '2026-03-10T15:00:00.000Z', String(p?.date));
+
+// --- Payroll email mentioning "cargo de" must stay INCOME ---
+p = bankParserFactory.parseEmail(email({
+  from: 'notificaciones@promerica.com.do',
+  subject: 'Notificación de Transacción Banco Promerica',
+  bodyText: 'Abono de nómina por RD$ 48,500.00 acreditado a su cuenta, sin cargo de comisión.'
+}));
+check('Nómina con "sin cargo de comisión" = INCOME', p?.type === 'INCOME', `${p?.type} ${p?.amount}`);
+
+// --- Categorization ---
+const promoDesc = 'Estimado cliente, transacción con su tarjeta Club Promerica';
+const cats: [string, string][] = [
+  ['NETFLIX.COM', 'Entretenimiento y Suscripciones'],
+  ['SMBRAVO CHURCHILL', 'Supermercados'],
+  ['FARMACIACAROL', 'Salud y Farmacias'],
+  ['Barberia Juan', 'Otros Gastos'],
+  ['The Irish Pub', 'Bares y Vida Nocturna']
+];
+for (const [merchant, expected] of cats) {
+  const got = categorizationService.categorize(merchant, promoDesc, 'EXPENSE');
+  check(`Categoría "${merchant}"`, got === expected, got);
+}
 
 // --- Statements ---
 const semicolonCsv = `Fecha;Descripción;Débito;Crédito;Balance

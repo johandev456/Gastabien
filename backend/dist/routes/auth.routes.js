@@ -75,9 +75,25 @@ function canChangeConfig(req) {
 const MAX_FAILED_ATTEMPTS = 5;
 const ATTEMPT_WINDOW_MS = 5 * 60 * 1000;
 const failedAttempts = new Map();
+const MAX_TRACKED_CLIENTS = 1000;
+/** req.ip honours `trust proxy` (set in index.ts), so spoofed X-Forwarded-For entries are ignored. */
 function clientKey(req) {
-    const fwd = req.headers['x-forwarded-for']?.split(',')[0]?.trim();
-    return fwd || req.ip || 'unknown';
+    return req.ip || req.socket.remoteAddress || 'unknown';
+}
+/** Drops expired entries so one-off clients don't accumulate forever. */
+function pruneFailures() {
+    const now = Date.now();
+    for (const [key, entry] of failedAttempts) {
+        if (now - entry.firstAt > ATTEMPT_WINDOW_MS)
+            failedAttempts.delete(key);
+    }
+    // Hard cap as a last resort (oldest entries first, Map keeps insertion order)
+    while (failedAttempts.size > MAX_TRACKED_CLIENTS) {
+        const oldest = failedAttempts.keys().next().value;
+        if (oldest === undefined)
+            break;
+        failedAttempts.delete(oldest);
+    }
 }
 function isRateLimited(req) {
     const entry = failedAttempts.get(clientKey(req));
@@ -94,7 +110,10 @@ function registerFailure(req) {
     const key = clientKey(req);
     const entry = failedAttempts.get(key);
     if (!entry || Date.now() - entry.firstAt > ATTEMPT_WINDOW_MS) {
+        failedAttempts.delete(key);
         failedAttempts.set(key, { count: 1, firstAt: Date.now() });
+        if (failedAttempts.size > MAX_TRACKED_CLIENTS / 2)
+            pruneFailures();
     }
     else {
         entry.count++;

@@ -23,7 +23,7 @@ class PromericaParser extends base_parser_1.BaseBankParser {
         const typeSubject = this.stripCardProductNames(subject);
         const typeText = this.stripCardProductNames(fullText);
         const isPurchase = /consumo|compra|cargo|d[eé]bito/i.test(typeSubject) ||
-            /\b(?:consumo|compra|cargo)\s+(?:por|en|de)\b/i.test(typeText);
+            /\b(?:consumo|compra)\s+(?:por|en)\b/i.test(typeText);
         // Body keywords must describe money coming IN (a bare "depósito" can appear in disclaimers)
         const isIncome = !isPurchase && (/dep[oó]sito|cr[eé]dito|transferencia recibida|abono|n[oó]mina|sueldo|salario|pago recibido/i.test(typeSubject) ||
             /n[oó]mina|sueldo|salario|cr[eé]dito\s*en\s*cuenta|ha sido acreditad[oa]|acreditad[oa]\s+(?:a|en)\s+su|abono de|abono a|transferencia recibida|dep[oó]sito recibido|dep[oó]sito\s+(?:a|en)\s+su\s+cuenta/i.test(typeText));

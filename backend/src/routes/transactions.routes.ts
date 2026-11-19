@@ -24,6 +24,9 @@ function parseDateInput(value: unknown): string | null {
   return isNaN(t) ? null : new Date(t).toISOString();
 }
 
+const isValidCategory = (c: unknown): boolean =>
+  typeof c === 'string' && Object.prototype.hasOwnProperty.call(CATEGORY_COLORS, c);
+
 function validationError(res: any, message: string) {
   return res.status(400).json({ error: message, message });
 }
@@ -76,7 +79,7 @@ router.post('/', (req, res) => {
   if (type !== undefined && !VALID_TYPES.includes(type)) return validationError(res, 'Tipo de transacción inválido');
   if (currency !== undefined && !VALID_CURRENCIES.includes(currency)) return validationError(res, 'Moneda inválida');
   if (bank !== undefined && !VALID_BANKS.includes(bank)) return validationError(res, 'Banco inválido');
-  if (category !== undefined && category !== '' && !(category in CATEGORY_COLORS)) return validationError(res, 'Categoría inválida');
+  if (category !== undefined && category !== '' && !isValidCategory(category)) return validationError(res, 'Categoría inválida');
   const parsedDate = date !== undefined && date !== '' ? parseDateInput(date) : new Date().toISOString();
   if (!parsedDate) return validationError(res, 'Fecha inválida');
 
@@ -113,7 +116,7 @@ router.put('/:id', (req, res) => {
   }
   if (type !== undefined && !VALID_TYPES.includes(type)) return validationError(res, 'Tipo de transacción inválido');
   if (currency !== undefined && !VALID_CURRENCIES.includes(currency)) return validationError(res, 'Moneda inválida');
-  if (category !== undefined && !(category in CATEGORY_COLORS)) return validationError(res, 'Categoría inválida');
+  if (category !== undefined && !isValidCategory(category)) return validationError(res, 'Categoría inválida');
   if (merchant !== undefined && (typeof merchant !== 'string' || !merchant.trim())) return validationError(res, 'Comercio inválido');
   let parsedDate: string | undefined;
   if (date !== undefined) {

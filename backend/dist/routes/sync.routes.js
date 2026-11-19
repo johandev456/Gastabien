@@ -31,9 +31,12 @@ router.post('/resync', async (req, res) => {
         if (!user || (!user.google_refresh_token && !user.google_access_token)) {
             return res.json({ status: 'FAILED', emailsProcessed: 0, newTransactionsCount: 0, transactions: [], error: 'Usuario no ha conectado su cuenta de Gmail.' });
         }
-        const removed = await db_1.dbOps.clearEmailTransactions(userId);
-        const result = await sync_service_1.syncService.syncUserGmail(userId, { full: true });
-        return res.json({ ...result, removedCount: removed });
+        if (sync_service_1.syncService.isSyncing(userId)) {
+            return res.json({ status: 'FAILED', emailsProcessed: 0, newTransactionsCount: 0, transactions: [], error: 'Ya hay una sincronización en curso. Espera a que termine.' });
+        }
+        // Clearing happens inside syncUserGmail, under the per-user lock
+        const result = await sync_service_1.syncService.syncUserGmail(userId, { full: true, clearEmailTransactions: true });
+        return res.json(result);
     }
     catch (err) {
         return res.status(500).json({
