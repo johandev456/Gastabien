@@ -109,16 +109,33 @@ class CategorizationService {
             ]
         }
     ];
+    keywordPatterns = new Map();
+    normalize(text) {
+        return text.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    }
+    /** Whole-word match ("bar" matches "Sports Bar" but not "Barbería" or "Bravo"). */
+    matchesKeyword(text, keyword) {
+        let re = this.keywordPatterns.get(keyword);
+        if (!re) {
+            const escaped = this.normalize(keyword).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            re = new RegExp(`(?:^|[^a-z0-9])${escaped}(?:s|es)?(?:$|[^a-z0-9])`);
+            this.keywordPatterns.set(keyword, re);
+        }
+        return re.test(text);
+    }
     categorize(merchant, description, type = 'EXPENSE') {
         if (type === 'INCOME') {
             return 'Ingresos y Nómina';
         }
-        const textToAnalyze = `${merchant} ${description || ''}`.toLowerCase();
-        // Check rules in order
-        for (const rule of this.rules) {
-            for (const keyword of rule.keywords) {
-                if (textToAnalyze.includes(keyword.toLowerCase())) {
-                    return rule.category;
+        // The merchant is the strongest signal: check it against every rule before looking at the
+        // free-text description (which contains noise like "Club Promerica" or "tarjeta").
+        const sources = [merchant || '', description || ''].map(t => this.normalize(t)).filter(Boolean);
+        for (const text of sources) {
+            for (const rule of this.rules) {
+                for (const keyword of rule.keywords) {
+                    if (this.matchesKeyword(text, keyword)) {
+                        return rule.category;
+                    }
                 }
             }
         }
